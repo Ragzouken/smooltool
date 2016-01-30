@@ -22,6 +22,8 @@ public class Test : MonoBehaviour
     [SerializeField] private Texture2D testtex;
     [SerializeField] private WorldView worldView;
 
+    [Header("Host")]
+    [SerializeField] private InputField titleInput;
     [SerializeField] private Button createButton;
 
     [Header("List")]
@@ -77,7 +79,7 @@ public class Test : MonoBehaviour
     private void OnClickedCreate()
     {
         var create = new CreateMatchRequest();
-        create.name = "a whole new world";
+        create.name = titleInput.text;
         create.size = 4;
         create.advertise = true;
         create.password = "";
