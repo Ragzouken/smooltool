@@ -9,6 +9,8 @@ using UnityEngine.Networking;
 using UnityEngine.Networking.Types;
 using UnityEngine.Networking.Match;
 
+using UnityEngine.SceneManagement;
+
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -21,6 +23,7 @@ public class Test : MonoBehaviour
     [SerializeField] private CanvasGroup group;
     [SerializeField] private Texture2D testtex;
     [SerializeField] private WorldView worldView;
+    [SerializeField] private Popups popups;
 
     [Header("Host")]
     [SerializeField] private InputField titleInput;
@@ -101,7 +104,8 @@ public class Test : MonoBehaviour
         }
         else
         {
-            Debug.LogError("Create match failed " + response.extendedInfo);
+            popups.Show(string.Format("Create match failed: \"{0}\"", response.extendedInfo),
+                        delegate { });
         }
     }
 
@@ -187,7 +191,8 @@ public class Test : MonoBehaviour
         }
         else
         {
-            Debug.Log("couldn't join :( " + response.extendedInfo);
+            popups.Show(string.Format("Couldn't join: \"{0}\"", response.extendedInfo),
+                        delegate { });
         }
     }
 
@@ -210,6 +215,13 @@ public class Test : MonoBehaviour
             world.tileset.SetPixels32(testtex.GetPixels32());
             world.tileset.Apply();
 
+            AddAvatar(new World.Avatar
+            {
+                id = 0,
+                destination = Vector2.zero,
+                source = Vector2.zero,
+            });
+
             hostID = NetworkTransport.AddHost(topology, 9001);
         }
         else
@@ -227,12 +239,166 @@ public class Test : MonoBehaviour
         = new Dictionary<int, byte[]>();
     private int tiledatalimit = -1;
 
+    public enum Type
+    {
+        Tileset,
+        Tilemap,
+
+        TileImage,
+
+        ReplicateAvatar,
+        DestroyAvatar,
+        MoveAvatar,
+    }
+
+
+    private void OnNewClientConnected(int connectionID)
+    {
+        Debug.Log("New client: " + connectionID);
+
+        connectionIDs.Add(connectionID);
+
+        var avatar = new World.Avatar
+        {
+            id = connectionID,
+            destination = new Vector2(16, 16 + connectionID * 32),
+        };
+
+        AddAvatar(avatar);
+
+        clients.Add(new Client
+        {
+            connectionID = connectionID,
+            avatar = avatar,
+        });
+
+        StartCoroutine(SendWorld(connectionID, world));
+    }
+
+    private void OnConnectedToHost(int connectionID)
+    {
+        Debug.Log("connected to host: " + connectionID);
+
+        connectionIDs.Add(connectionID);
+    }
+
+    private void OnClientDisconnected(int connectionID)
+    {
+        Debug.Log("Client disconnected: " + connectionID);
+
+        var client = clients.Where(c => c.connectionID == connectionID).First();
+        clients.Remove(client);
+        connectionIDs.Remove(connectionID);
+
+        RemoveAvatar(client.avatar);
+    }
+
+    private void OnDisconnectedFromHost(int connectionID)
+    {
+        popups.Show("Disconnected from host.",
+                    () => SceneManager.LoadScene("test"));
+    }
+
+    private class Client
+    {
+        public int connectionID;
+        public World.Avatar avatar;
+    }
+
+    private List<Client> clients = new List<Client>();
+
+    private void AddAvatar(World.Avatar avatar)
+    {
+        world.avatars.Add(avatar);
+
+        if (hosting)
+        {
+            StartCoroutine(SendAll(ReplicateAvatarMessage(avatar), 0));
+        }
+
+        worldView.RefreshAvatars();
+    }
+
+    private void RemoveAvatar(World.Avatar avatar)
+    {
+        world.avatars.Remove(avatar);
+
+        if (hosting)
+        {
+            StartCoroutine(SendAll(DestroyAvatarMessage(avatar), 0));
+        }
+
+        worldView.RefreshAvatars();
+    }
+
+    private IEnumerator Send(int connectionID, byte[] data, int channelID)
+    {
+        byte error;
+
+        while (!NetworkTransport.Send(hostID, connectionID, channelID, data, data.Length, out error))
+        {
+            yield return null;
+        }
+    }
+
+    private IEnumerator SendAll(byte[] data, int channelID)
+    {
+        byte error;
+
+        for (int i = 0; i < clients.Count; ++i)
+        {
+            while (!NetworkTransport.Send(hostID, clients[i].connectionID, channelID, data, data.Length, out error))
+            {
+                yield return null;
+            }
+        }
+    }
+
+    private byte[] ReplicateAvatarMessage(World.Avatar avatar)
+    {
+        var writer = new NetworkWriter();
+        writer.Write((int)Type.ReplicateAvatar);
+        writer.Write(avatar.id);
+        writer.Write(avatar.destination);
+        writer.Write(avatar.source);
+
+        return writer.AsArray();
+    }
+
+    private void ReceiveCreateAvatar(NetworkReader reader)
+    {
+        var avatar = new World.Avatar
+        {
+            id = reader.ReadInt32(),
+            destination = reader.ReadVector2(),
+            source = reader.ReadVector2(),
+        };
+
+        AddAvatar(avatar);
+    }
+
+    private byte[] DestroyAvatarMessage(World.Avatar avatar)
+    {
+        var writer = new NetworkWriter();
+        writer.Write((int) Type.DestroyAvatar);
+        writer.Write(avatar.id);
+
+        return writer.AsArray();
+    }
+
+    private void ReceiveDestroyAvatar(NetworkReader reader)
+    {
+        int id = reader.ReadInt32();
+
+        RemoveAvatar(world.avatars.Where(a => a.id == id).First());
+    }
+
     private void Update()
     {
         if (hostID == -1) return;
 
-        var netEvent = NetworkEventType.Nothing;
-        int connectionId;
+        var eventType = NetworkEventType.Nothing;
+        int connectionID;
         int channelId;
         int receivedSize;
         byte error;
@@ -240,95 +406,109 @@ public class Test : MonoBehaviour
         do
         {
             // Get events from the server/client game connection
-            netEvent = NetworkTransport.ReceiveFromHost(hostID,
-                                                        out connectionId,
-                                                        out channelId,
-                                                        recvBuffer,
-                                                        recvBuffer.Length,
-                                                        out receivedSize,
-                                                        out error);
+            eventType = NetworkTransport.ReceiveFromHost(hostID,
+                                                         out connectionID,
+                                                         out channelId,
+                                                         recvBuffer,
+                                                         recvBuffer.Length,
+                                                         out receivedSize,
+                                                         out error);
             if ((NetworkError)error != NetworkError.Ok)
             {
                 Debug.LogError("Error while receiveing network message: " + (NetworkError)error);
             }
 
-            switch (netEvent)
+            if (eventType == NetworkEventType.ConnectEvent)
             {
-                case NetworkEventType.ConnectEvent:
-                    {
-                        Debug.Log("Connected through relay, ConnectionID:" + connectionId +
-                            " ChannelID:" + channelId);
-                        connected = true;
-                        connectionIDs.Add(connectionId);
+                Debug.Log("Connected through relay, ConnectionID:" + connectionID +
+                    " ChannelID:" + channelId);
+                connected = true;
 
-                        if (hosting) StartCoroutine(SendWorld(connectionId, world));
-                        break;
-                    }
-                case NetworkEventType.DataEvent:
-                    {
-                        var reader = new NetworkReader(recvBuffer);
+                if (hosting)
+                {
+                    OnNewClientConnected(connectionID);
+                }
+                else
+                {
+                    OnConnectedToHost(connectionID);
 
-                        if (channelId == 1)
-                        {
-                            Type type = (Type) reader.ReadInt32();
-
-                            if (type == Type.Tilemap)
-                            {
-                                Debug.Log("tilemap");
-
-                                world.tilemap = reader.ReadBytesAndSize();
-                                tiledatalimit = reader.ReadInt32();
-
-                                worldView.SetWorld(world);
-                            }
-                            else if (type == Type.Tileset)
-                            {
-                                int id = reader.ReadInt32();
-
-                                Debug.Log("receiving id " + id);
-
-                                tiledata[id] = reader.ReadBytesAndSize();
-                            }
-
-                            if (type == Type.TileImage)
-                            {
-                                var colors = new Color32[1024];
-
-                                int tile = reader.ReadByte();
-
-                                colors = reader.ReadBytesAndSize().Select(pal => pal2col[pal]).ToArray();
-
-                                int x = tile % 16;
-                                int y = tile / 16;
-
-                                world.tileset.SetPixels32(x * 32, y * 32, 32, 32, colors);
-                                world.tileset.Apply();
-                            }
-                        }
-                        else
-                        {
-                            Debug.Log("Data event, ConnectionID:" + connectionId +
-                            " ChannelID: " + channelId +
-                            " Received Size: " + receivedSize);
-
-                            Debug.Log(reader.ReadString());
-                        }
-
-                        break;
-                    }
-                case NetworkEventType.DisconnectEvent:
-                    {
-                        Debug.Log("Connection disconnected, ConnectionID:" + connectionId);
-                        break;
-                    }
-                case NetworkEventType.Nothing:
-                    break;
+                    Debug.Log("I AM: " + connectionID);
+                }
             }
-        } while (netEvent != NetworkEventType.Nothing);
+            else if (eventType == NetworkEventType.DisconnectEvent)
+            {
+                if (hosting)
+                {
+                    OnClientDisconnected(connectionID);
+                }
+                else
+                {
+                    OnDisconnectedFromHost(connectionID);
+                }
+            }
+            else if (eventType == NetworkEventType.DataEvent)
+            {
+                var reader = new NetworkReader(recvBuffer);
+
+                { 
+                    Type type = (Type)reader.ReadInt32();
+
+                    if (type == Type.Tilemap)
+                    {
+                        Debug.Log("tilemap");
+
+                        world.tilemap = reader.ReadBytesAndSize();
+                        tiledatalimit = reader.ReadInt32();
+
+                        worldView.SetWorld(world);
+                    }
+                    else if (type == Type.Tileset)
+                    {
+                        int id = reader.ReadInt32();
+
+                        Debug.Log("receiving id " + id);
+
+                        tiledata[id] = reader.ReadBytesAndSize();
+                    }
+                    else if (type == Type.TileImage)
+                    {
+                        var colors = new Color32[1024];
+
+                        int tile = reader.ReadByte();
+
+                        colors = reader.ReadBytesAndSize().Select(pal => pal2col[pal]).ToArray();
+
+                        int x = tile % 16;
+                        int y = tile / 16;
+
+                        world.tileset.SetPixels32(x * 32, y * 32, 32, 32, colors);
+                        world.tileset.Apply();
+                    }
+                    else if (type == Type.ReplicateAvatar)
+                    {
+                        ReceiveCreateAvatar(reader);
+                    }
+                    else if (type == Type.DestroyAvatar)
+                    {
+                        ReceiveDestroyAvatar(reader);
+                    }
+                }
+            }
+        }
+        while (eventType != NetworkEventType.Nothing);
     }
 
     private void OnApplicationQuit()
     {
+        byte error;
+
+        for (int i = 0; i < connectionIDs.Count; ++i)
+        {
+            NetworkTransport.Disconnect(hostID, connectionIDs[i], out error);
+
+            if (error != 0) Debug.LogError("Failed to send message: " + (NetworkError)error);
+        }
+        
         NetworkTransport.Shutdown();
     }
 
@@ -365,14 +545,6 @@ public class Test : MonoBehaviour
     }
 
     private int splitsize = 1024;
-
-    public enum Type
-    {
-        Tileset,
-        Tilemap,
-
-        TileImage,
-    }
 
     private bool SendTileImage(int connectionID, 
                                World world, 
@@ -454,6 +626,11 @@ public class Test : MonoBehaviour
 
             if ((NetworkError)error != NetworkError.Ok)
                 Debug.LogError("Failed to send message: " + (NetworkError)error);
+        }
+
+        foreach (var avatar in world.avatars)
+        {
+            StartCoroutine(Send(connectionID, ReplicateAvatarMessage(avatar), 0));
         }
 
         for (int i = 0; i < 256; ++i)

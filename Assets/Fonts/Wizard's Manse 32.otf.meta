@@ -14,7 +14,7 @@ TrueTypeFontImporter:
   fallbackFontReferences:
   - {fileID: 12800000, guid: 5c67db47ed9f07f4aa31bfc957f39d5d, type: 3}
   customCharacters: 
-  fontRenderingMode: 0
+  fontRenderingMode: 3
   userData: 
   assetBundleName: 
   assetBundleVariant: 

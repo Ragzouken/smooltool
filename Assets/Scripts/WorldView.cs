@@ -10,10 +10,21 @@ public class WorldView : MonoBehaviour
     [SerializeField] private Image tilePrefab;
     [SerializeField] private Transform tileContainer;
 
+    [SerializeField] private Transform avatarPrefab;
+    [SerializeField] private Transform avatarContainer;
+
     private Image[] tiles;
+
+    private MonoBehaviourPooler<World.Avatar, Transform> avatars;
+
+    public World world { get; private set; }
 
     private void Awake()
     {
+        avatars = new MonoBehaviourPooler<World.Avatar, Transform>(avatarPrefab,
+                                                                   avatarContainer,
+                                                                   InitialiseAvatar);
+
         tiles = new Image[1024];
 
         for (int i = 0; i < 1024; ++i)
@@ -31,13 +42,27 @@ public class WorldView : MonoBehaviour
         }
     }
 
+    private void InitialiseAvatar(World.Avatar avatar, Transform view)
+    {
+        view.transform.position = avatar.destination;
+    }
+
     public void SetWorld(World world)
     {
+        this.world = world;
+
         for (int i = 0; i < 1024; ++i)
         {
             byte tile = world.tilemap[i];
 
             tiles[i].sprite = world.tiles[tile];
         }
+
+        RefreshAvatars();
+    }
+
+    public void RefreshAvatars()
+    {
+        avatars.SetActive(world.avatars);
     }
 }

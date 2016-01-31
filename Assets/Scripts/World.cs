@@ -7,9 +7,16 @@ using System.Collections.Generic;
 
 public class World
 {
+    public class Avatar
+    {
+        public int id;
+        public Vector2 destination, source;
+    }
+
     public Texture2D tileset;
     public Sprite[] tiles;
     public byte[] tilemap;
+    public List<Avatar> avatars = new List<Avatar>();
 
     public World()
     {

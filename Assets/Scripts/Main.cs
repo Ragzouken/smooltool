@@ -23,8 +23,6 @@ public class Main : MonoBehaviour
 
         float edge = (mSize / 2f) - (vSize / 2f);// + tSize / 2;
 
-        Debug.Log(edge);
-
         camera.transform.position = new Vector3(Mathf.Clamp(x, -edge, edge),
                                                 Mathf.Clamp(y, -edge, edge),
                                                 -10);
