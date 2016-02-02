@@ -39,4 +39,14 @@ public class World
                                      SpriteMeshType.FullRect);
         }
     }
+
+    public Avatar Occupied(Vector2 cell)
+    {
+        for (int i = 0; i < avatars.Count; ++i)
+        {
+            if (avatars[i].destination == cell) return avatars[i];
+        }
+
+        return null;
+    }
 }

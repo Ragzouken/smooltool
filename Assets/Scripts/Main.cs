@@ -14,19 +14,6 @@ public class Main : MonoBehaviour
 
     private void Update()
     {
-        float x = mover.transform.position.x;
-        float y = mover.transform.position.y;
-
-        float tSize = 32;
-        float vSize = 512 / 2;
-        float mSize = tSize * 32;
-
-        float edge = (mSize / 2f) - (vSize / 2f);// + tSize / 2;
-
-        camera.transform.position = new Vector3(Mathf.Clamp(x, -edge, edge),
-                                                Mathf.Clamp(y, -edge, edge),
-                                                -10);
-
         if (coroutine != null) return;
 
         if (Input.GetKey(KeyCode.UpArrow))

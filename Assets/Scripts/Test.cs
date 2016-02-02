@@ -222,6 +222,8 @@ public class Test : MonoBehaviour
                 source = Vector2.zero,
             });
 
+            worldView.viewer = world.avatars[0];
+
             hostID = NetworkTransport.AddHost(topology, 9001);
         }
         else
@@ -249,6 +251,7 @@ public class Test : MonoBehaviour
         ReplicateAvatar,
         DestroyAvatar,
         MoveAvatar,
+        GiveAvatar,
     }
 
 
@@ -261,7 +264,7 @@ public class Test : MonoBehaviour
         var avatar = new World.Avatar
         {
             id = connectionID,
-            destination = new Vector2(16, 16 + connectionID * 32),
+            destination = new Vector2(0, connectionID),
         };
 
         AddAvatar(avatar);
@@ -273,6 +276,7 @@ public class Test : MonoBehaviour
         });
 
         StartCoroutine(SendWorld(connectionID, world));
+        StartCoroutine(Send(connectionID, GiveAvatarMessage(avatar), 0));
     }
 
     private void OnConnectedToHost(int connectionID)
@@ -393,6 +397,22 @@ public class Test : MonoBehaviour
         RemoveAvatar(world.avatars.Where(a => a.id == id).First());
     }
 
+    private byte[] GiveAvatarMessage(World.Avatar avatar)
+    {
+        var writer = new NetworkWriter();
+        writer.Write((int) Type.GiveAvatar);
+        writer.Write(avatar.id);
+
+        return writer.AsArray();
+    }
+
+    private void ReceiveGiveAvatar(NetworkReader reader)
+    {
+        int id = reader.ReadInt32();
+
+        worldView.viewer = world.avatars.Where(a => a.id == id).First();
+    }
+
     private void Update()
     {
         if (hostID == -1) return;
@@ -491,6 +511,10 @@ public class Test : MonoBehaviour
                     else if (type == Type.DestroyAvatar)
                     {
                         ReceiveDestroyAvatar(reader);
+                    }
+                    else if (type == Type.GiveAvatar)
+                    {
+                        ReceiveGiveAvatar(reader);
                     }
                 }
             }

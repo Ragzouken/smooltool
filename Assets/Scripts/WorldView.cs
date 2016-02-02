@@ -7,6 +7,8 @@ using System.Collections.Generic;
 
 public class WorldView : MonoBehaviour 
 {
+    [SerializeField] private new Camera camera;
+
     [SerializeField] private Image tilePrefab;
     [SerializeField] private Transform tileContainer;
 
@@ -18,6 +20,8 @@ public class WorldView : MonoBehaviour
     private MonoBehaviourPooler<World.Avatar, Transform> avatars;
 
     public World world { get; private set; }
+
+    public World.Avatar viewer;
 
     private void Awake()
     {
@@ -44,7 +48,7 @@ public class WorldView : MonoBehaviour
 
     private void InitialiseAvatar(World.Avatar avatar, Transform view)
     {
-        view.transform.position = avatar.destination;
+        view.transform.position = avatar.destination * 32 + Vector2.one * 16;
     }
 
     public void SetWorld(World world)
@@ -64,5 +68,25 @@ public class WorldView : MonoBehaviour
     public void RefreshAvatars()
     {
         avatars.SetActive(world.avatars);
+    }
+
+    private void Update()
+    {
+        if (viewer == null) return;
+
+        var view = avatars.Get(viewer);
+
+        float x = view.transform.position.x;
+        float y = view.transform.position.y;
+
+        float tSize = 32;
+        float vSize = 512 / 2;
+        float mSize = tSize * 32;
+
+        float edge = (mSize / 2f) - (vSize / 2f);// + tSize / 2;
+
+        camera.transform.position = new Vector3(Mathf.Clamp(x, -edge, edge),
+                                                Mathf.Clamp(y, -edge, edge),
+                                                -10);
     }
 }
