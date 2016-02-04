@@ -17,6 +17,8 @@ using UnityEditor;
 
 public class Test : MonoBehaviour
 {
+    [SerializeField] private Font[] fonts;
+
     private Dictionary<Color32, byte> col2pal = new Dictionary<Color32, byte>();
     private Dictionary<byte, Color32> pal2col = new Dictionary<byte, Color32>();
 
@@ -41,10 +43,15 @@ public class Test : MonoBehaviour
     [SerializeField] private Text worldDescription;
     [SerializeField] private Button enterButton;
 
+    [SerializeField] private GameObject chatObject;
+    [SerializeField] private InputField chatInput;
+
     private NetworkMatch match;
 
     private void Awake()
     {
+        foreach (Font font in fonts) font.material.mainTexture.filterMode = FilterMode.Point;
+
         match = gameObject.AddComponent<NetworkMatch>();
 
         createButton.onClick.AddListener(OnClickedCreate);
@@ -72,6 +79,8 @@ public class Test : MonoBehaviour
                 index += 1;
             }
         }
+
+        StartCoroutine(SendMessages());
     }
 
     private void InitialiseWorld(MatchDesc desc, WorldPanel panel)
@@ -143,11 +152,6 @@ public class Test : MonoBehaviour
             });
 
             yield return new WaitForSeconds(5);
-        }
-
-        if (connected)
-        {
-
         }
     }
 
@@ -239,7 +243,6 @@ public class Test : MonoBehaviour
 
     private Dictionary<int, byte[]> tiledata
         = new Dictionary<int, byte[]>();
-    private int tiledatalimit = -1;
 
     public enum Type
     {
@@ -252,6 +255,8 @@ public class Test : MonoBehaviour
         DestroyAvatar,
         MoveAvatar,
         GiveAvatar,
+
+        Chat,
     }
 
 
@@ -276,7 +281,6 @@ public class Test : MonoBehaviour
         });
 
         StartCoroutine(SendWorld(connectionID, world));
-        StartCoroutine(Send(connectionID, GiveAvatarMessage(avatar), 0));
     }
 
     private void OnConnectedToHost(int connectionID)
@@ -317,7 +321,7 @@ public class Test : MonoBehaviour
 
         if (hosting)
         {
-            StartCoroutine(SendAll(ReplicateAvatarMessage(avatar), 0));
+            SendAll(ReplicateAvatarMessage(avatar), 0);
         }
 
         worldView.RefreshAvatars();
@@ -329,33 +333,31 @@ public class Test : MonoBehaviour
 
         if (hosting)
         {
-            StartCoroutine(SendAll(DestroyAvatarMessage(avatar), 0));
+            SendAll(DestroyAvatarMessage(avatar), 0);
         }
 
         worldView.RefreshAvatars();
     }
 
-    private IEnumerator Send(int connectionID, byte[] data, int channelID)
+    private void Send(int connectionID, byte[] data, int channelID = 0)
     {
-        byte error;
-
-        while (!NetworkTransport.Send(hostID, connectionID, channelID, data, data.Length, out error))
+        sends.Enqueue(new Message
         {
-            yield return null;
-        }
+            channel = channelID, 
+            connections = new int[] { connectionID },
+            data = data,
+        });
     }
 
-    private IEnumerator SendAll(byte[] data, int channelID)
+    private void SendAll(byte[] data, int channelID = 0)
     {
-        byte error;
-
-        for (int i = 0; i < clients.Count; ++i)
+        sends.Enqueue(new Message
         {
-            while (!NetworkTransport.Send(hostID, clients[i].connectionID, channelID, data, data.Length, out error))
-            {
-                yield return null;
-            }
-        }
+            channel = channelID,
+            connections = hosting ? clients.Select(client => client.connectionID).ToArray() 
+                                  : new int[] { 1 },
+            data = data,
+        });
     }
 
     private byte[] ReplicateAvatarMessage(World.Avatar avatar)
@@ -413,9 +415,139 @@ public class Test : MonoBehaviour
         worldView.viewer = world.avatars.Where(a => a.id == id).First();
     }
 
+    private byte[] MoveAvatarMessage(World.Avatar avatar,
+                                     Vector2 destination)
+    {
+        var writer = new NetworkWriter();
+        writer.Write((int) Type.MoveAvatar);
+        writer.Write(avatar.id);
+        writer.Write(destination);
+
+        return writer.AsArray();
+    }
+
+    private byte[] ChatMessage(World.Avatar avatar, string message)
+    {
+        var writer = new NetworkWriter();
+        writer.Write((int) Type.Chat);
+        writer.Write(avatar.id);
+        writer.Write(message);
+
+        return writer.AsArray();
+    }
+
+    private bool Blocked(World.Avatar avatar,
+                         Vector2 destination)
+    {
+        return world.avatars.Any(a => a.destination == destination)
+            || (avatar.destination - destination).magnitude > 1;
+    }
+
+    private void Move(Vector2 direction)
+    {
+        var avatar = worldView.viewer;
+
+        if (avatar != null 
+         && avatar.source == avatar.destination
+         && !Blocked(avatar, avatar.destination + direction))
+        {
+            avatar.destination = avatar.destination + direction;
+
+            worldView.RefreshAvatars();
+
+            SendAll(MoveAvatarMessage(avatar, avatar.destination));
+        }
+    }
+
+    private class Message
+    {
+        public int[] connections;
+        public int channel;
+        public byte[] data;
+    }
+
+    private Queue<Message> sends = new Queue<Message>();
+
+    private IEnumerator SendMessages()
+    {
+        while (true)
+        {
+            if (sends.Count > 0)
+            {
+                Message message = sends.Dequeue();
+
+                byte error;
+
+                for (int i = 0; i < message.connections.Length; ++i)
+                {
+                    while (!NetworkTransport.Send(hostID,
+                                                  message.connections[i],
+                                                  message.channel,
+                                                  message.data,
+                                                  message.data.Length,
+                                                  out error))
+                    {
+                        yield return null;
+                    }
+                }
+
+                Type type = (Type) (new NetworkReader(message.data).ReadInt32());
+
+                Debug.LogFormat("SENT: {0}", type);
+            }
+            else
+            {
+                yield return null;
+            }
+        }
+    }
+
     private void Update()
     {
         if (hostID == -1) return;
+
+        if (Input.GetKeyDown(KeyCode.UpArrow))
+        {
+            Move(Vector2.up);
+        }
+        else if (Input.GetKeyDown(KeyCode.LeftArrow))
+        {
+            Move(Vector2.left);
+        }
+        else if (Input.GetKeyDown(KeyCode.RightArrow))
+        {
+            Move(Vector2.right);
+        }
+        else if (Input.GetKeyDown(KeyCode.DownArrow))
+        {
+            Move(Vector2.down);
+        }
+        else if (Input.GetKeyDown(KeyCode.Return))
+        {
+            if (chatObject.activeSelf)
+            {
+                string message = chatInput.text;
+
+                chatObject.SetActive(false);
+                chatInput.text = "";
+
+                if (message.Trim().Length > 0)
+                {
+                    SendAll(ChatMessage(worldView.viewer, message));
+
+                    if (hosting) worldView.Chat(worldView.viewer, message);
+                }
+
+                UnityEngine.EventSystems.EventSystem.current.SetSelectedGameObject(null);
+            }
+            else
+            {
+                chatObject.SetActive(true);
+                chatInput.text = "";
+
+                chatInput.Select();
+            }
+        }
 
         var eventType = NetworkEventType.Nothing;
         int connectionID;
@@ -478,7 +610,6 @@ public class Test : MonoBehaviour
                         Debug.Log("tilemap");
 
                         world.tilemap = reader.ReadBytesAndSize();
-                        tiledatalimit = reader.ReadInt32();
 
                         worldView.SetWorld(world);
                     }
@@ -515,6 +646,54 @@ public class Test : MonoBehaviour
                     else if (type == Type.GiveAvatar)
                     {
                         ReceiveGiveAvatar(reader);
+                    }
+                    else if (type == Type.MoveAvatar)
+                    {
+                        int id = reader.ReadInt32();
+                        Vector2 dest = reader.ReadVector2();
+
+                        World.Avatar avatar = world.avatars.Where(a => a.id == id).First();
+
+                        if (hosting)
+                        {
+                            if (connectionID == avatar.id && !Blocked(avatar, dest))
+                            {
+                                avatar.destination = dest;
+                                worldView.RefreshAvatars();
+
+                                SendAll(MoveAvatarMessage(avatar, avatar.destination));
+                            }
+                            else
+                            {
+                                Send(connectionID, MoveAvatarMessage(avatar, avatar.destination));
+                            }
+                        }
+                        else
+                        {
+                            avatar.destination = dest;
+                            worldView.RefreshAvatars();
+                        }
+                    }
+                    else if (type == Type.Chat)
+                    {
+                        int id = reader.ReadInt32();
+                        string message = reader.ReadString();
+
+                        World.Avatar avatar = world.avatars.Where(a => a.id == id).First();
+
+                        if (hosting)
+                        {
+                            if (connectionID == avatar.id)
+                            {
+                                SendAll(ChatMessage(avatar, message));
+
+                                worldView.Chat(avatar, message);
+                            }
+                        }
+                        else
+                        {
+                            worldView.Chat(avatar, message);
+                        }
                     }
                 }
             }
@@ -568,8 +747,6 @@ public class Test : MonoBehaviour
         Debug.Log(error);
     }
 
-    private int splitsize = 1024;
-
     private bool SendTileImage(int connectionID, 
                                World world, 
                                byte tile,
@@ -600,40 +777,8 @@ public class Test : MonoBehaviour
     {
         byte error;
         var writer = new NetworkWriter();
-        //byte[] image = world.tileset.EncodeToPNG();
 
         int id = 0;
-
-        /*
-        using (var reader = new System.IO.MemoryStream(image))
-        {
-            var buffer = new byte[splitsize];
-
-            while (true)
-            {
-                int count = reader.Read(buffer, 0, splitsize);
-
-                if (count == 0) break;
-
-                writer.SeekZero();
-                writer.Write((int) Type.Tileset);
-                writer.Write(id);
-                writer.WriteBytesAndSize(buffer, count);
-
-                NetworkTransport.Send(hostID,
-                                      connectionID,
-                                      1,
-                                      writer.AsArray(),
-                                      writer.Position,
-                                      out error);
-
-                if ((NetworkError)error != NetworkError.Ok)
-                    Debug.LogError("Failed to send message: " + (NetworkError)error);
-
-                id += 1;
-            }
-        }
-        */
 
         {
             writer.SeekZero();
@@ -654,7 +799,12 @@ public class Test : MonoBehaviour
 
         foreach (var avatar in world.avatars)
         {
-            StartCoroutine(Send(connectionID, ReplicateAvatarMessage(avatar), 0));
+            Send(connectionID, ReplicateAvatarMessage(avatar), 0);
+
+            if (avatar.id == connectionID)
+            {
+                Send(connectionID, GiveAvatarMessage(avatar), 0);
+            }
         }
 
         for (int i = 0; i < 256; ++i)

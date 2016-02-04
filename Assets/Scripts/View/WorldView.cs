@@ -12,22 +12,25 @@ public class WorldView : MonoBehaviour
     [SerializeField] private Image tilePrefab;
     [SerializeField] private Transform tileContainer;
 
-    [SerializeField] private Transform avatarPrefab;
+    [SerializeField] private AvatarView avatarPrefab;
     [SerializeField] private Transform avatarContainer;
 
     private Image[] tiles;
 
-    private MonoBehaviourPooler<World.Avatar, Transform> avatars;
+    private MonoBehaviourPooler<World.Avatar, AvatarView> avatars;
 
     public World world { get; private set; }
 
     public World.Avatar viewer;
 
+    private Dictionary<World.Avatar, float> animations
+        = new Dictionary<World.Avatar, float>();
+
     private void Awake()
     {
-        avatars = new MonoBehaviourPooler<World.Avatar, Transform>(avatarPrefab,
-                                                                   avatarContainer,
-                                                                   InitialiseAvatar);
+        avatars = new MonoBehaviourPooler<World.Avatar, AvatarView>(avatarPrefab,
+                                                                    avatarContainer,
+                                                                    InitialiseAvatar);
 
         tiles = new Image[1024];
 
@@ -46,8 +49,10 @@ public class WorldView : MonoBehaviour
         }
     }
 
-    private void InitialiseAvatar(World.Avatar avatar, Transform view)
+    private void InitialiseAvatar(World.Avatar avatar, AvatarView view)
     {
+        animations[avatar] = 0;
+
         view.transform.position = avatar.destination * 32 + Vector2.one * 16;
     }
 
@@ -70,6 +75,11 @@ public class WorldView : MonoBehaviour
         avatars.SetActive(world.avatars);
     }
 
+    public void Chat(World.Avatar avatar, string message)
+    {
+        avatars.Get(avatar).SetChat(message);
+    }
+
     private void Update()
     {
         if (viewer == null) return;
@@ -88,5 +98,24 @@ public class WorldView : MonoBehaviour
         camera.transform.position = new Vector3(Mathf.Clamp(x, -edge, edge),
                                                 Mathf.Clamp(y, -edge, edge),
                                                 -10);
+
+        float period = 0.25f;
+
+        avatars.MapActive((a, v) =>
+        {
+            if (a.source != a.destination) a.u += Time.deltaTime;
+
+            float u = Mathf.Min(1, a.u / period);
+
+            if (u >= 1)
+            {
+                a.source = a.destination;
+                a.u = 0;
+            }
+            else
+            {
+                v.transform.position = Vector2.Lerp(a.source, a.destination, u) * 32 + Vector2.one * 16;
+            }
+        });
     }
 }

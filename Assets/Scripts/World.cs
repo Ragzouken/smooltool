@@ -11,6 +11,8 @@ public class World
     {
         public int id;
         public Vector2 destination, source;
+
+        public float u;
     }
 
     public Texture2D tileset;

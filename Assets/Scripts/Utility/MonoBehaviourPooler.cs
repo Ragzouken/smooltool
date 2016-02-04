@@ -135,6 +135,14 @@ public class MonoBehaviourPooler<TShortcut, TInstance>
         Get(active);
     }
 
+    public void MapActive(System.Action<TShortcut, TInstance> action)
+    {
+        foreach (var pair in instances)
+        {
+            action(pair.Key, pair.Value);
+        }
+    }
+
     public void SetActive()
     {
         Clear();
