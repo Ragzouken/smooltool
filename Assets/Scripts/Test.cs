@@ -21,6 +21,10 @@ public class Test : MonoBehaviour
 {
     [SerializeField] private Font[] fonts;
 
+    [SerializeField] private new AudioSource audio;
+    [SerializeField] private AudioClip speakSound;
+    [SerializeField] private AudioClip placeSound;
+
     private Dictionary<Color32, byte> col2pal = new Dictionary<Color32, byte>();
     private Dictionary<byte, Color32> pal2col = new Dictionary<byte, Color32>();
 
@@ -66,6 +70,7 @@ public class Test : MonoBehaviour
         foreach (Font font in fonts) font.material.mainTexture.filterMode = FilterMode.Point;
 
         match = gameObject.AddComponent<NetworkMatch>();
+        match.baseUri = new System.Uri("https://us1-mm.unet.unity3d.com");
 
         createButton.onClick.AddListener(OnClickedCreate);
         enterButton.onClick.AddListener(OnClickedEnter);
@@ -105,7 +110,7 @@ public class Test : MonoBehaviour
     {
         var create = new CreateMatchRequest();
         create.name = titleInput.text;
-        create.size = 4;
+        create.size = 8;
         create.advertise = true;
         create.password = "";
 
@@ -232,7 +237,7 @@ public class Test : MonoBehaviour
         config.AddChannel(QosType.ReliableSequenced);
         config.AddChannel(QosType.Reliable);
         config.AddChannel(QosType.Unreliable);
-        var topology = new HostTopology(config, 4);
+        var topology = new HostTopology(config, 8);
 
         this.hosting = hosting;
 
@@ -470,6 +475,7 @@ public class Test : MonoBehaviour
             SendAll(SetTileMessage(location, tile));
         }
 
+        audio.PlayOneShot(placeSound);
         worldView.SetTile(location, tile);
     }
 
@@ -550,6 +556,13 @@ public class Test : MonoBehaviour
         }
     }
 
+    private void Chat(World.Avatar avatar, string message)
+    {
+        audio.PlayOneShot(speakSound);
+
+        worldView.Chat(avatar, message);
+    }
+
     private void Update()
     {
         if (hostID == -1) return;
@@ -588,6 +601,7 @@ public class Test : MonoBehaviour
 
                     if (location < 1024)
                     {
+                        audio.PlayOneShot(placeSound);
                         worldView.SetTile(location, tile);
 
                         SendAll(SetTileMessage(location, tile));
@@ -597,7 +611,7 @@ public class Test : MonoBehaviour
                 {
                     SendAll(ChatMessage(worldView.viewer, message));
 
-                    if (hosting) worldView.Chat(worldView.viewer, message);
+                    if (hosting) Chat(worldView.viewer, message);
                 }
 
                 UnityEngine.EventSystems.EventSystem.current.SetSelectedGameObject(null);
@@ -649,6 +663,7 @@ public class Test : MonoBehaviour
              && Input.GetMouseButton(0)
              && this.world.tilemap[location] != tile)
             {
+                audio.PlayOneShot(placeSound);
                 worldView.SetTile(location, tile);
 
                 SendAll(SetTileMessage(location, tile));
@@ -797,12 +812,12 @@ public class Test : MonoBehaviour
                             {
                                 SendAll(ChatMessage(avatar, message));
 
-                                worldView.Chat(avatar, message);
+                                Chat(avatar, message);
                             }
                         }
                         else
                         {
-                            worldView.Chat(avatar, message);
+                            Chat(avatar, message);
                         }
                     }
                     else if (type == Type.SetTile)

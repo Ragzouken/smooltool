@@ -103,8 +103,8 @@ public class WorldView : MonoBehaviour
 
         float edge = (mSize / 2f) - (vSize / 2f);// + tSize / 2;
 
-        camera.transform.position = new Vector3(Mathf.Clamp(x, -edge, edge),
-                                                Mathf.Clamp(y, -edge, edge),
+        camera.transform.position = new Vector3(Mathf.Round(Mathf.Clamp(x, -edge, edge) * 2) / 2f,
+                                                Mathf.Round(Mathf.Clamp(y, -edge, edge) * 2) / 2f,
                                                 -10);
 
         float period = 0.25f;

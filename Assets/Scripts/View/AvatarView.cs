@@ -7,6 +7,7 @@ using System.Collections.Generic;
 
 public class AvatarView : MonoBehaviour 
 {
+    [SerializeField] MonoBehaviour coroutine;
     [SerializeField] private Image image;
 
     [SerializeField] private GameObject chatObject;
@@ -14,7 +15,7 @@ public class AvatarView : MonoBehaviour
 
     public void SetChat(string message)
     {
-        StartCoroutine(DisplayChat(message));
+        coroutine.StartCoroutine(DisplayChat(message));
     }
 
     private IEnumerator DisplayChat(string message)
