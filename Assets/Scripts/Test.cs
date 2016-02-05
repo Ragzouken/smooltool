@@ -40,6 +40,7 @@ public class Test : MonoBehaviour
     [Header("List")]
     [SerializeField] private Transform worldContainer;
     [SerializeField] private WorldPanel worldPrefab;
+    [SerializeField] private GameObject newerVersionDisableObject;
     [SerializeField] private GameObject noWorldsDisableObject;
 
     private MonoBehaviourPooler<MatchDesc, WorldPanel> worlds;
@@ -64,6 +65,13 @@ public class Test : MonoBehaviour
     private NetworkMatch match;
 
     private byte paintTile;
+
+    public enum Version
+    {
+        PRE1,
+    }
+
+    public static Version version = Version.PRE1;
 
     private void Awake()
     {
@@ -114,6 +122,8 @@ public class Test : MonoBehaviour
         create.advertise = true;
         create.password = "";
 
+        create.name += "!" + (int) version;
+
         match.CreateMatch(create, OnMatchCreate);
     }
 
@@ -161,18 +171,43 @@ public class Test : MonoBehaviour
         toggle.SetTile(world.tiles[tile], () => paintTile = tile);
     }
 
+    private int GetVersion(MatchDesc desc)
+    {
+        if (desc.name.Contains("!"))
+        {
+            string end = desc.name.Split('!').Last();
+            int version;
+
+            if (int.TryParse(end, out version))
+            {
+                return version;
+            }
+        }
+
+        return 0;
+    }
+
     private IEnumerator RefreshList()
     {
         while (true)
         {
-            match.ListMatches(0, 64, "", matches =>
-            {
-                noWorldsDisableObject.SetActive(matches.matches.Count == 0);
+            var request = new ListMatchRequest();
+            request.nameFilter = "";
+            request.pageSize = 32;
 
-                worlds.SetActive(matches.matches);
+            match.ListMatches(request, matches =>
+            {
+                var list = matches.matches;
+
+                var valid = list.Where(m => GetVersion(m) == (int) version);
+                var newer = list.Where(m => GetVersion(m) >  (int) version);
+
+                newerVersionDisableObject.SetActive(newer.Any());
+                noWorldsDisableObject.SetActive(!newer.Any() && !valid.Any());
+                worlds.SetActive(valid);
 
                 if (selected != null
-                 && !matches.matches.Any(m => m.networkId == selected.networkId))
+                 && !list.Any(m => m.networkId == selected.networkId))
                 {
                     DeselectMatch();
                 }
@@ -201,6 +236,8 @@ public class Test : MonoBehaviour
     {
         if (selected != null)
         {
+            group.interactable = false;
+
             match.JoinMatch(selected.networkId, "", OnMatchJoined);
         }
     }
@@ -217,11 +254,11 @@ public class Test : MonoBehaviour
             //gameObject.SetActive(false);
 
             ConnectThroughRelay(response);
-            group.alpha = 0f;
-            group.blocksRaycasts = false;
         }
         else
         {
+            group.interactable = true;
+
             popups.Show(string.Format("Couldn't join: \"{0}\"", response.extendedInfo),
                         delegate { });
         }
@@ -299,6 +336,7 @@ public class Test : MonoBehaviour
         {
             id = connectionID,
             destination = new Vector2(0, connectionID),
+            source = new Vector2(0, connectionID),
         };
 
         AddAvatar(avatar);
@@ -315,6 +353,9 @@ public class Test : MonoBehaviour
     private void OnConnectedToHost(int connectionID)
     {
         Debug.Log("connected to host: " + connectionID);
+
+        group.alpha = 0f;
+        group.blocksRaycasts = false;
 
         connectionIDs.Add(connectionID);
     }
@@ -378,12 +419,14 @@ public class Test : MonoBehaviour
         });
     }
 
-    private void SendAll(byte[] data, int channelID = 0)
+    private void SendAll(byte[] data, 
+                         int channelID = 0,
+                         int except = -1)
     {
         sends.Enqueue(new Message
         {
             channel = channelID,
-            connections = hosting ? clients.Select(client => client.connectionID).ToArray() 
+            connections = hosting ? clients.Select(client => client.connectionID).Where(id => id != except).ToArray() 
                                   : new int[] { 1 },
             data = data,
         });
@@ -475,8 +518,11 @@ public class Test : MonoBehaviour
             SendAll(SetTileMessage(location, tile));
         }
 
-        audio.PlayOneShot(placeSound);
-        worldView.SetTile(location, tile);
+        if (world.tilemap[location] != tile)
+        {
+            audio.PlayOneShot(placeSound);
+            worldView.SetTile(location, tile);
+        }
     }
 
     private byte[] SetTileMessage(int location,
@@ -494,7 +540,8 @@ public class Test : MonoBehaviour
                          Vector2 destination)
     {
         return world.avatars.Any(a => a.destination == destination)
-            || (avatar.destination - destination).magnitude > 1;
+            || (avatar.destination - destination).magnitude > 1
+            || !Rect.MinMaxRect(-16, -16, 16, 16).Contains(destination);
     }
 
     private void Move(Vector2 direction)
@@ -565,6 +612,8 @@ public class Test : MonoBehaviour
 
     private void Update()
     {
+        GameObject selected = UnityEngine.EventSystems.EventSystem.current.currentSelectedGameObject;
+
         if (hostID == -1) return;
 
         if (Input.GetKey(KeyCode.UpArrow))
@@ -623,6 +672,10 @@ public class Test : MonoBehaviour
 
                 chatInput.Select();
             }
+        }
+        else if (chatObject.activeSelf && selected != chatInput.gameObject)
+        {
+            chatObject.SetActive(false);
         }
 
         if (!chatObject.activeSelf && Input.GetKey(KeyCode.Space))
@@ -690,9 +743,12 @@ public class Test : MonoBehaviour
                                                          recvBuffer.Length,
                                                          out receivedSize,
                                                          out error);
-            if ((NetworkError)error != NetworkError.Ok)
+            if ((NetworkError) error != NetworkError.Ok)
             {
-                Debug.LogError("Error while receiveing network message: " + (NetworkError)error);
+                group.interactable = true;
+
+                popups.Show("Network Error: " + (NetworkError) error,
+                            () => SceneManager.LoadScene("test"));
             }
 
             if (eventType == NetworkEventType.ConnectEvent)
@@ -781,12 +837,14 @@ public class Test : MonoBehaviour
 
                         if (hosting)
                         {
-                            if (connectionID == avatar.id && !Blocked(avatar, dest))
+                            if (connectionID == avatar.id 
+                             && !Blocked(avatar, dest))
                             {
+                                avatar.source = avatar.destination;
                                 avatar.destination = dest;
-                                worldView.RefreshAvatars();
+                                avatar.u = 0;
 
-                                SendAll(MoveAvatarMessage(avatar, avatar.destination));
+                                SendAll(MoveAvatarMessage(avatar, avatar.destination), except: avatar.id);
                             }
                             else
                             {
@@ -795,8 +853,9 @@ public class Test : MonoBehaviour
                         }
                         else
                         {
+                            avatar.source = avatar.destination;
                             avatar.destination = dest;
-                            worldView.RefreshAvatars();
+                            avatar.u = 0;
                         }
                     }
                     else if (type == Type.Chat)

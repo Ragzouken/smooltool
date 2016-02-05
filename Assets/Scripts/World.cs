@@ -20,10 +20,18 @@ public class World
     public byte[] tilemap;
     public List<Avatar> avatars = new List<Avatar>();
 
+    private static Color32[] colors =
+    {
+        Color.black,
+        Color.white,
+    };
+
     public World()
     {
         tileset = new Texture2D(512, 512);
         tileset.filterMode = FilterMode.Point;
+        tileset.SetPixels32(Enumerable.Range(0, 512 * 512).Select(i => colors[Random.Range(0, 2)]).ToArray());
+        tileset.Apply();
 
         tiles = new Sprite[256];
         tilemap = new byte[1024];

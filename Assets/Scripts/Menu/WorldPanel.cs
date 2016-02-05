@@ -23,7 +23,13 @@ public class WorldPanel : MonoBehaviour
 
     public void SetMatch(MatchDesc desc)
     {
-        nameText.text = desc.name;
+        string name = string.Join("!", desc.name.Split('!')
+                                                .Reverse()
+                                                .Skip(1)
+                                                .Reverse()
+                                                .ToArray());
+
+        nameText.text = name;
         playersText.text = desc.currentSize + " / " + desc.maxSize;
         this.desc = desc;
     }
