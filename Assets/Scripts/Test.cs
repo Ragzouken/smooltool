@@ -51,6 +51,12 @@ public class Test : MonoBehaviour
     [SerializeField] private Camera camera;
     [SerializeField] private Image tileCursor;
 
+    [Header("Tile Palette")]
+    [SerializeField] private GameObject paletteObject;
+    [SerializeField] private RectTransform paletteContainer;
+    [SerializeField] private TileToggle tilePrefab;
+    private MonoBehaviourPooler<byte, TileToggle> tiles;
+
     private NetworkMatch match;
 
     private byte paintTile;
@@ -132,13 +138,22 @@ public class Test : MonoBehaviour
     {
         world = new World();
 
-        for (int i = 0; i < 1024; ++i) world.tilemap[i] = (byte) Random.Range(0, 256);
+        for (int i = 0; i < 1024; ++i) world.tilemap[i] = (byte) Random.Range(0, 23);
 
         worldView.SetWorld(world);
 
         test = world.tileset;
 
         StartCoroutine(RefreshList());
+
+        tiles = new MonoBehaviourPooler<byte, TileToggle>(tilePrefab,
+                                                          paletteContainer,
+                                                          InitialiseTileToggle);
+    }
+
+    private void InitialiseTileToggle(byte tile, TileToggle toggle)
+    {
+        toggle.SetTile(world.tiles[tile], () => paintTile = tile);
     }
 
     private IEnumerator RefreshList()
@@ -596,6 +611,17 @@ public class Test : MonoBehaviour
             }
         }
 
+        if (!chatObject.activeSelf && Input.GetKey(KeyCode.Space))
+        {
+            tiles.Clear();
+            tiles.SetActive(Enumerable.Range(0, 24).Select(i => (byte) i));
+            paletteObject.SetActive(true);
+        }
+        else
+        {
+            paletteObject.SetActive(false);
+        }
+
         if (!UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject()
          && Rect.MinMaxRect(0, 0, 512, 512).Contains(Input.mousePosition))
         {
@@ -895,7 +921,7 @@ public class Test : MonoBehaviour
             }
         }
 
-        for (int i = 0; i < 256; ++i)
+        for (int i = 0; i < 24; ++i)
         {
             while (!SendTileImage(connectionID, world, (byte) i, out error))
             {

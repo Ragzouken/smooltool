@@ -18,7 +18,7 @@ public class StayOnScreen : MonoBehaviour
         transform.SetParent(world, false);
     }
 
-    private void Update()
+    private void LateUpdate()
     {
         var rtrans = transform as RectTransform;
 
