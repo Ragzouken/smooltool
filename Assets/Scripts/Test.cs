@@ -11,6 +11,8 @@ using UnityEngine.Networking.Match;
 
 using UnityEngine.SceneManagement;
 
+using System.Text.RegularExpressions;
+
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -46,7 +48,12 @@ public class Test : MonoBehaviour
     [SerializeField] private GameObject chatObject;
     [SerializeField] private InputField chatInput;
 
+    [SerializeField] private Camera camera;
+    [SerializeField] private Image tileCursor;
+
     private NetworkMatch match;
+
+    private byte paintTile;
 
     private void Awake()
     {
@@ -257,6 +264,8 @@ public class Test : MonoBehaviour
         GiveAvatar,
 
         Chat,
+
+        SetTile,
     }
 
 
@@ -436,6 +445,30 @@ public class Test : MonoBehaviour
         return writer.AsArray();
     }
 
+    private void ReceiveSetTile(NetworkReader reader)
+    {
+        int location = reader.ReadInt32();
+        byte tile = reader.ReadByte();
+
+        if (hosting)
+        {
+            SendAll(SetTileMessage(location, tile));
+        }
+
+        worldView.SetTile(location, tile);
+    }
+
+    private byte[] SetTileMessage(int location,
+                                  byte tile)
+    {
+        var writer = new NetworkWriter();
+        writer.Write((int) Type.SetTile);
+        writer.Write(location);
+        writer.Write(tile);
+
+        return writer.AsArray();
+    }
+
     private bool Blocked(World.Avatar avatar,
                          Vector2 destination)
     {
@@ -531,7 +564,21 @@ public class Test : MonoBehaviour
                 chatObject.SetActive(false);
                 chatInput.text = "";
 
-                if (message.Trim().Length > 0)
+                var match = Regex.Match(message, @"tile\s(\d+)\s*=\s*(\d+)");
+
+                if (match.Success)
+                {
+                    int location = int.Parse(match.Groups[1].Value);
+                    byte tile = byte.Parse(match.Groups[2].Value);
+
+                    if (location < 1024)
+                    {
+                        worldView.SetTile(location, tile);
+
+                        SendAll(SetTileMessage(location, tile));
+                    }
+                }
+                else if (message.Trim().Length > 0)
                 {
                     SendAll(ChatMessage(worldView.viewer, message));
 
@@ -547,6 +594,43 @@ public class Test : MonoBehaviour
 
                 chatInput.Select();
             }
+        }
+
+        if (!UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject()
+         && Rect.MinMaxRect(0, 0, 512, 512).Contains(Input.mousePosition))
+        {
+            tileCursor.gameObject.SetActive(true);
+            tileCursor.sprite = this.world.tiles[paintTile];
+
+            Vector2 mouse = Input.mousePosition;
+            Vector3 world;
+
+            RectTransformUtility.ScreenPointToWorldPointInRectangle(worldView.transform as RectTransform,
+                                                                    mouse,
+                                                                    camera,
+                                                                    out world);
+
+            int x = Mathf.FloorToInt(world.x / 32);
+            int y = Mathf.FloorToInt(world.y / 32);
+
+            tileCursor.transform.position = new Vector2(x * 32, y * 32);
+
+            byte tile = paintTile;
+            int location = (y + 16) * 32 + (x + 16);
+
+            if (location > 0 
+             && location < 1024 
+             && Input.GetMouseButton(0)
+             && this.world.tilemap[location] != tile)
+            {
+                worldView.SetTile(location, tile);
+
+                SendAll(SetTileMessage(location, tile));
+            }
+        }
+        else
+        {
+            tileCursor.gameObject.SetActive(false);
         }
 
         var eventType = NetworkEventType.Nothing;
@@ -694,6 +778,10 @@ public class Test : MonoBehaviour
                         {
                             worldView.Chat(avatar, message);
                         }
+                    }
+                    else if (type == Type.SetTile)
+                    {
+                        ReceiveSetTile(reader);
                     }
                 }
             }

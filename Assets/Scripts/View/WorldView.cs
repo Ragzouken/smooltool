@@ -80,6 +80,14 @@ public class WorldView : MonoBehaviour
         avatars.Get(avatar).SetChat(message);
     }
 
+    public void SetTile(int location, byte tile)
+    {
+        world.tilemap[location] = tile;
+        tiles[location].sprite = world.tiles[tile];
+
+        Debug.Log("setting tile");
+    }
+
     private void Update()
     {
         if (viewer == null) return;
