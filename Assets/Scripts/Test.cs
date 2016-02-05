@@ -55,6 +55,7 @@ public class Test : MonoBehaviour
 
     [SerializeField] private new Camera camera;
     [SerializeField] private Image tileCursor;
+    [SerializeField] private GameObject pickerCursor;
 
     [Header("Tile Palette")]
     [SerializeField] private GameObject paletteObject;
@@ -698,7 +699,10 @@ public class Test : MonoBehaviour
         if (!UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject()
          && Rect.MinMaxRect(0, 0, 512, 512).Contains(Input.mousePosition))
         {
+            bool picker = Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt);
+
             tileCursor.gameObject.SetActive(true);
+            pickerCursor.SetActive(picker);
             tileCursor.sprite = this.world.tiles[paintTile];
 
             Vector2 mouse = Input.mousePosition;
@@ -719,13 +723,19 @@ public class Test : MonoBehaviour
 
             if (location > 0 
              && location < 1024 
-             && Input.GetMouseButton(0)
-             && this.world.tilemap[location] != tile)
+             && Input.GetMouseButton(0))
             {
-                audio.PlayOneShot(placeSound);
-                worldView.SetTile(location, tile);
+                if (!picker && this.world.tilemap[location] != tile)
+                {
+                    audio.PlayOneShot(placeSound);
+                    worldView.SetTile(location, tile);
 
-                SendAll(SetTileMessage(location, tile));
+                    SendAll(SetTileMessage(location, tile));
+                }
+                else
+                {
+                    paintTile = this.world.tilemap[location];
+                }
             }
         }
         else
