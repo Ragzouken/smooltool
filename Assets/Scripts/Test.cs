@@ -53,7 +53,7 @@ public class Test : MonoBehaviour
     [SerializeField] private GameObject chatObject;
     [SerializeField] private InputField chatInput;
 
-    [SerializeField] private Camera camera;
+    [SerializeField] private new Camera camera;
     [SerializeField] private Image tileCursor;
 
     [Header("Tile Palette")]
@@ -78,7 +78,7 @@ public class Test : MonoBehaviour
         foreach (Font font in fonts) font.material.mainTexture.filterMode = FilterMode.Point;
 
         match = gameObject.AddComponent<NetworkMatch>();
-        match.baseUri = new System.Uri("https://us1-mm.unet.unity3d.com");
+        match.baseUri = new System.Uri("https://eu1-mm.unet.unity3d.com");
 
         createButton.onClick.AddListener(OnClickedCreate);
         enterButton.onClick.AddListener(OnClickedEnter);
@@ -223,7 +223,11 @@ public class Test : MonoBehaviour
     {
         selected = desc;
         detailsDisableObject.SetActive(true);
-        worldDescription.text = desc.name;
+        worldDescription.text = string.Join("!", desc.name.Split('!')
+                                                           .Reverse()
+                                                           .Skip(1)
+                                                           .Reverse()
+                                                           .ToArray());
     }
 
     public void DeselectMatch()
@@ -395,6 +399,7 @@ public class Test : MonoBehaviour
         }
 
         worldView.RefreshAvatars();
+        Chat(avatar, "[ENTERED]");
     }
 
     private void RemoveAvatar(World.Avatar avatar)
@@ -406,6 +411,7 @@ public class Test : MonoBehaviour
             SendAll(DestroyAvatarMessage(avatar), 0);
         }
 
+        Chat(avatar, "[EXITED]");
         worldView.RefreshAvatars();
     }
 
@@ -753,8 +759,6 @@ public class Test : MonoBehaviour
 
             if (eventType == NetworkEventType.ConnectEvent)
             {
-                Debug.Log("Connected through relay, ConnectionID:" + connectionID +
-                    " ChannelID:" + channelId);
                 connected = true;
 
                 if (hosting)
@@ -764,8 +768,6 @@ public class Test : MonoBehaviour
                 else
                 {
                     OnConnectedToHost(connectionID);
-
-                    Debug.Log("I AM: " + connectionID);
                 }
             }
             else if (eventType == NetworkEventType.DisconnectEvent)
@@ -931,8 +933,6 @@ public class Test : MonoBehaviour
                                               Utility.GetSourceID(),
                                               response.nodeId,
                                               out error);
-
-        Debug.Log(error);
     }
 
     private bool SendTileImage(int connectionID, 

@@ -7,7 +7,7 @@ using System.Collections.Generic;
 
 public class StayOnScreen : MonoBehaviour 
 {
-    [SerializeField] private Camera camera;
+    [SerializeField] private new Camera camera;
     [SerializeField] private RectTransform world;
     [SerializeField] private RectTransform screen;
     [SerializeField] private RectTransform bounds;
