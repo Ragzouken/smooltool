@@ -155,6 +155,10 @@ public class Test : MonoBehaviour
         world = new World();
 
         for (int i = 0; i < 1024; ++i) world.tilemap[i] = (byte) Random.Range(0, 23);
+        for (int i = 0; i < 256; ++i)
+        {
+            if (Random.value > 0.5f) world.walls.Add((byte) i);
+        }
 
         worldView.SetWorld(world);
 
@@ -317,6 +321,7 @@ public class Test : MonoBehaviour
     {
         Tileset,
         Tilemap,
+        Walls,
 
         TileImage,
 
@@ -328,6 +333,7 @@ public class Test : MonoBehaviour
         Chat,
 
         SetTile,
+        SetWall,
     }
 
 
@@ -543,12 +549,51 @@ public class Test : MonoBehaviour
         return writer.AsArray();
     }
 
+    private void ReceiveSetWall(NetworkReader reader)
+    {
+        byte tile = reader.ReadByte();
+        bool wall = reader.ReadBoolean();
+
+        if (hosting)
+        {
+            SendAll(SetWallMessage(tile, wall));
+        }
+
+        if (world.walls.Contains(tile) != wall)
+        {
+            audio.PlayOneShot(placeSound);
+
+            if (wall)
+            {
+                world.walls.Add(tile);
+            }
+            else
+            {
+                world.walls.Remove(tile);
+            }
+        }
+    }
+
+    private byte[] SetWallMessage(byte tile, bool wall)
+    {
+        var writer = new NetworkWriter();
+        writer.Write((int) Type.SetWall);
+        writer.Write(tile);
+        writer.Write(wall);
+
+        return writer.AsArray();
+    }
+
     private bool Blocked(World.Avatar avatar,
                          Vector2 destination)
     {
+        int location = (int) ((destination.y + 16) * 32 + (destination.x + 16));
+        byte tile = (location >= 0 && location < 1024) ? world.tilemap[location] : (byte) 0;
+
         return world.avatars.Any(a => a.destination == destination)
             || (avatar.destination - destination).magnitude > 1
-            || !Rect.MinMaxRect(-16, -16, 16, 16).Contains(destination);
+            || !Rect.MinMaxRect(-16, -16, 16, 16).Contains(destination)
+            || world.walls.Contains(tile);
     }
 
     private void Move(Vector2 direction)
@@ -595,6 +640,8 @@ public class Test : MonoBehaviour
                                                   message.data.Length,
                                                   out error))
                     {
+                        Debug.LogFormat("CANT: {0}", (NetworkError) error);
+
                         yield return null;
                     }
                 }
@@ -648,19 +695,27 @@ public class Test : MonoBehaviour
                 chatObject.SetActive(false);
                 chatInput.text = "";
 
-                var match = Regex.Match(message, @"tile\s(\d+)\s*=\s*(\d+)");
+                var match = Regex.Match(message, @"wall\s(\d+)\s+([yn])");
 
                 if (match.Success)
                 {
-                    int location = int.Parse(match.Groups[1].Value);
-                    byte tile = byte.Parse(match.Groups[2].Value);
+                    byte tile = byte.Parse(match.Groups[1].Value);
+                    bool wall = match.Groups[2].Value == "y";
 
-                    if (location < 1024)
+                    if (world.walls.Contains(tile) != wall)
                     {
-                        audio.PlayOneShot(placeSound);
-                        worldView.SetTile(location, tile);
+                        SendAll(SetWallMessage(tile, wall));
 
-                        SendAll(SetTileMessage(location, tile));
+                        audio.PlayOneShot(placeSound);
+
+                        if (wall)
+                        {
+                            world.walls.Add(tile);
+                        }
+                        else
+                        {
+                            world.walls.Remove(tile);
+                        }
                     }
                 }
                 else if (message.Trim().Length > 0)
@@ -800,17 +855,21 @@ public class Test : MonoBehaviour
 
                     if (type == Type.Tilemap)
                     {
-                        Debug.Log("tilemap");
-
                         world.tilemap = reader.ReadBytesAndSize();
-
                         worldView.SetWorld(world);
+                    }
+                    else if (type == Type.Walls)
+                    {
+                        world.walls.Clear();
+
+                        foreach (var wall in reader.ReadBytesAndSize())
+                        {
+                            world.walls.Add(wall);
+                        }
                     }
                     else if (type == Type.Tileset)
                     {
                         int id = reader.ReadInt32();
-
-                        Debug.Log("receiving id " + id);
 
                         tiledata[id] = reader.ReadBytesAndSize();
                     }
@@ -895,6 +954,10 @@ public class Test : MonoBehaviour
                     {
                         ReceiveSetTile(reader);
                     }
+                    else if (type == Type.SetWall)
+                    {
+                        ReceiveSetWall(reader);
+                    }
                 }
             }
         }
@@ -973,26 +1036,23 @@ public class Test : MonoBehaviour
 
     private IEnumerator SendWorld(int connectionID, World world)
     {
-        byte error;
-        var writer = new NetworkWriter();
+        {
+            var writer = new NetworkWriter();
 
-        int id = 0;
+            writer.Write((int) Type.Tilemap);
+            writer.WriteBytesFull(world.tilemap);
+            
+
+            Send(connectionID, writer.AsArray(), 1);
+        }
 
         {
-            writer.SeekZero();
-            writer.Write((int)Type.Tilemap);
-            writer.WriteBytesFull(world.tilemap);
-            writer.Write(id);
+            var writer = new NetworkWriter();
 
-            NetworkTransport.Send(hostID,
-                                  connectionID,
-                                  1,
-                                  writer.AsArray(),
-                                  writer.Position,
-                                  out error);
+            writer.Write((int) Type.Walls);
+            writer.WriteBytesFull(world.walls.ToArray());
 
-            if ((NetworkError)error != NetworkError.Ok)
-                Debug.LogError("Failed to send message: " + (NetworkError)error);
+            Send(connectionID, writer.AsArray(), 1);
         }
 
         foreach (var avatar in world.avatars)
@@ -1005,12 +1065,16 @@ public class Test : MonoBehaviour
             }
         }
 
+        byte error;
+
         for (int i = 0; i < 24; ++i)
         {
             while (!SendTileImage(connectionID, world, (byte) i, out error))
             {
                 yield return null;
             };
+
+            yield return new WaitForSeconds(0.1f);
         }
 
         yield break;

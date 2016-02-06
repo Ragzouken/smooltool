@@ -18,6 +18,7 @@ public class World
     public Texture2D tileset;
     public Sprite[] tiles;
     public byte[] tilemap;
+    public HashSet<byte> walls = new HashSet<byte>();
     public List<Avatar> avatars = new List<Avatar>();
 
     private static Color32[] colors =
@@ -48,15 +49,5 @@ public class World
                                      0U,
                                      SpriteMeshType.FullRect);
         }
-    }
-
-    public Avatar Occupied(Vector2 cell)
-    {
-        for (int i = 0; i < avatars.Count; ++i)
-        {
-            if (avatars[i].destination == cell) return avatars[i];
-        }
-
-        return null;
     }
 }
