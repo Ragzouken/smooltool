@@ -18,6 +18,7 @@ public class TileEditor : MonoBehaviour
     [SerializeField] private Toggle[] colorToggles;
 
     private Action Save;
+    private Action Commit;
     private World world;
 
     private void Awake()
@@ -118,13 +119,15 @@ public class TileEditor : MonoBehaviour
 
     public void OpenAndEdit(World world,
                             Sprite sprite, 
-                            Action save)
+                            Action save,
+                            Action commit)
     {
         gameObject.SetActive(true);
 
         this.world = world;
         tileImage.sprite = sprite;
         Save = save;
+        Commit = commit;
 
         for (int i = 0; i < colorToggles.Length; ++i)
         {
@@ -133,6 +136,8 @@ public class TileEditor : MonoBehaviour
 
             sizeToggle.GetComponent<Image>().color = color;
         }
+
+        StartCoroutine(AutoSave());
     }
 
     private void OnClickedSave()
@@ -140,5 +145,16 @@ public class TileEditor : MonoBehaviour
         gameObject.SetActive(false);
 
         Save();
+        Commit();
+    }
+
+    private IEnumerator AutoSave()
+    {
+        while (true)
+        {
+            yield return new WaitForSeconds(5);
+
+            Save();
+        }
     }
 }

@@ -75,12 +75,14 @@ public class Test : MonoBehaviour
 
     public enum Version
     {
+        DEV,
         PRE1,
         PRE2,
         PRE3,
+        PRE4,
     }
 
-    public static Version version = Version.PRE3;
+    public static Version version = Version.DEV;
 
     private void Awake()
     {
@@ -131,7 +133,7 @@ public class Test : MonoBehaviour
         create.advertise = true;
         create.password = "";
 
-        create.name += "!" + (int) version;
+        create.name += "!" + (int)version;
 
         match.CreateMatch(create, OnMatchCreate);
     }
@@ -162,10 +164,10 @@ public class Test : MonoBehaviour
     {
         world = new World();
 
-        for (int i = 0; i < 1024; ++i) world.tilemap[i] = (byte) Random.Range(0, 23);
+        for (int i = 0; i < 1024; ++i) world.tilemap[i] = (byte)Random.Range(0, 23);
         for (int i = 0; i < 256; ++i)
         {
-            if (Random.value > 0.5f) world.walls.Add((byte) i);
+            if (Random.value > 0.5f) world.walls.Add((byte)i);
         }
 
         worldView.SetWorld(world);
@@ -235,8 +237,8 @@ public class Test : MonoBehaviour
             {
                 var list = matches.matches;
 
-                var valid = list.Where(m => GetVersion(m) == (int) version);
-                var newer = list.Where(m => GetVersion(m) >  (int) version);
+                var valid = list.Where(m => GetVersion(m) == (int)version);
+                var newer = list.Where(m => GetVersion(m) > (int)version);
 
                 newerVersionDisableObject.SetActive(newer.Any());
                 noWorldsDisableObject.SetActive(!newer.Any() && !valid.Any());
@@ -330,8 +332,8 @@ public class Test : MonoBehaviour
 
             for (int i = 0; i < 16; ++i)
             {
-                col2pal[world.palette[i]] = (byte) i;
-                pal2col[(byte) i] = world.palette[i];
+                col2pal[world.palette[i]] = (byte)i;
+                pal2col[(byte)i] = world.palette[i];
             }
 
             AddAvatar(new World.Avatar
@@ -491,7 +493,7 @@ public class Test : MonoBehaviour
     {
         sends.Enqueue(new Message
         {
-            channel = channelID, 
+            channel = channelID,
             connections = new int[] { connectionID },
             data = data,
         });
@@ -507,14 +509,14 @@ public class Test : MonoBehaviour
         }
     }
 
-    private void SendAll(byte[] data, 
+    private void SendAll(byte[] data,
                          int channelID = 0,
                          int except = -1)
     {
         sends.Enqueue(new Message
         {
             channel = channelID,
-            connections = hosting ? clients.Select(client => client.connectionID).Where(id => id != except).ToArray() 
+            connections = hosting ? clients.Select(client => client.connectionID).Where(id => id != except).ToArray()
                                   : new int[] { 1 },
             data = data,
         });
@@ -546,7 +548,7 @@ public class Test : MonoBehaviour
     private byte[] DestroyAvatarMessage(World.Avatar avatar)
     {
         var writer = new NetworkWriter();
-        writer.Write((int) Type.DestroyAvatar);
+        writer.Write((int)Type.DestroyAvatar);
         writer.Write(avatar.id);
 
         return writer.AsArray();
@@ -562,7 +564,7 @@ public class Test : MonoBehaviour
     private byte[] GiveAvatarMessage(World.Avatar avatar)
     {
         var writer = new NetworkWriter();
-        writer.Write((int) Type.GiveAvatar);
+        writer.Write((int)Type.GiveAvatar);
         writer.Write(avatar.id);
 
         return writer.AsArray();
@@ -579,7 +581,7 @@ public class Test : MonoBehaviour
                                      Vector2 destination)
     {
         var writer = new NetworkWriter();
-        writer.Write((int) Type.MoveAvatar);
+        writer.Write((int)Type.MoveAvatar);
         writer.Write(avatar.id);
         writer.Write(destination);
 
@@ -589,7 +591,7 @@ public class Test : MonoBehaviour
     private byte[] ChatMessage(World.Avatar avatar, string message)
     {
         var writer = new NetworkWriter();
-        writer.Write((int) Type.Chat);
+        writer.Write((int)Type.Chat);
         writer.Write(avatar.id);
         writer.Write(message);
 
@@ -617,7 +619,7 @@ public class Test : MonoBehaviour
                                   byte tile)
     {
         var writer = new NetworkWriter();
-        writer.Write((int) Type.SetTile);
+        writer.Write((int)Type.SetTile);
         writer.Write(location);
         writer.Write(tile);
 
@@ -654,7 +656,7 @@ public class Test : MonoBehaviour
     private byte[] SetWallMessage(byte tile, bool wall)
     {
         var writer = new NetworkWriter();
-        writer.Write((int) Type.SetWall);
+        writer.Write((int)Type.SetWall);
         writer.Write(tile);
         writer.Write(wall);
 
@@ -664,7 +666,7 @@ public class Test : MonoBehaviour
     private byte[] LockTileMessage(World.Avatar avatar, byte tile)
     {
         var writer = new NetworkWriter();
-        writer.Write((int) Type.LockTile);
+        writer.Write((int)Type.LockTile);
         writer.Write(avatar != null ? avatar.id : -1);
         writer.Write(tile);
 
@@ -702,12 +704,10 @@ public class Test : MonoBehaviour
 
     private void OpenForEdit(byte tile)
     {
-        tileEditor.OpenAndEdit(world, world.tiles[tile], delegate
-        {
-            SendAll(TileInChunksMessages(world, tile));
-
-            ReleaseTile(tile);
-        });
+        tileEditor.OpenAndEdit(world,
+                               world.tiles[tile],
+                               () => SendAll(TileInChunksMessages(world, tile)),
+                               () => ReleaseTile(tile));
     }
 
     private void ReceiveLockTile(NetworkReader reader)
@@ -739,7 +739,7 @@ public class Test : MonoBehaviour
 
     public World.Avatar ID2Avatar(int id)
     {
-        if (id == -1) return null; 
+        if (id == -1) return null;
 
         return world.avatars.Where(a => a.id == id).First();
     }
@@ -747,8 +747,8 @@ public class Test : MonoBehaviour
     private bool Blocked(World.Avatar avatar,
                          Vector2 destination)
     {
-        int location = (int) ((destination.y + 16) * 32 + (destination.x + 16));
-        byte tile = (location >= 0 && location < 1024) ? world.tilemap[location] : (byte) 0;
+        int location = (int)((destination.y + 16) * 32 + (destination.x + 16));
+        byte tile = (location >= 0 && location < 1024) ? world.tilemap[location] : (byte)0;
 
         return world.avatars.Any(a => a.destination == destination)
             || (avatar.destination - destination).magnitude > 1
@@ -760,7 +760,7 @@ public class Test : MonoBehaviour
     {
         var avatar = worldView.viewer;
 
-        if (avatar != null 
+        if (avatar != null
          && avatar.source == avatar.destination
          && !Blocked(avatar, avatar.destination + direction))
         {
@@ -802,13 +802,13 @@ public class Test : MonoBehaviour
                                                   message.data.Length,
                                                   out error))
                     {
-                        Debug.LogFormat("CANT: {0}", (NetworkError) error);
+                        Debug.LogFormat("CANT: {0}", (NetworkError)error);
 
                         yield return null;
                     }
                 }
 
-                Type type = (Type) (new NetworkReader(message.data).ReadInt32());
+                Type type = (Type)(new NetworkReader(message.data).ReadInt32());
 
                 //Debug.LogFormat("SENT: {0}", type);
             }
@@ -849,7 +849,7 @@ public class Test : MonoBehaviour
 
         if (!chatObject.activeSelf
          && !editing)
-        { 
+        {
             if (Input.GetKey(KeyCode.UpArrow) || Input.GetKey(KeyCode.W))
             {
                 Move(Vector2.up);
@@ -928,7 +928,7 @@ public class Test : MonoBehaviour
         if (!chatObject.activeSelf && !editing && Input.GetKey(KeyCode.Space))
         {
             tiles.Clear();
-            tiles.SetActive(Enumerable.Range(0, maxTiles).Select(i => (byte) i));
+            tiles.SetActive(Enumerable.Range(0, maxTiles).Select(i => (byte)i));
             paletteObject.SetActive(true);
         }
         else
@@ -1023,11 +1023,11 @@ public class Test : MonoBehaviour
                                                          recvBuffer.Length,
                                                          out receivedSize,
                                                          out error);
-            if ((NetworkError) error != NetworkError.Ok)
+            if ((NetworkError)error != NetworkError.Ok)
             {
                 group.interactable = true;
 
-                popups.Show("Network Error: " + (NetworkError) error,
+                popups.Show("Network Error: " + (NetworkError)error,
                             () => SceneManager.LoadScene("test"));
             }
 
@@ -1073,8 +1073,8 @@ public class Test : MonoBehaviour
                         {
                             world.palette[i] = reader.ReadColor32();
 
-                            col2pal[world.palette[i]] = (byte) i;
-                            pal2col[(byte) i] = world.palette[i];
+                            col2pal[world.palette[i]] = (byte)i;
+                            pal2col[(byte)i] = world.palette[i];
                         }
                     }
                     else if (type == Type.Walls)
@@ -1201,7 +1201,7 @@ public class Test : MonoBehaviour
 
             if (error != 0) Debug.LogError("Failed to send message: " + (NetworkError)error);
         }
-        
+
         NetworkTransport.Shutdown();
     }
 
@@ -1247,14 +1247,14 @@ public class Test : MonoBehaviour
         var ranking = world.palette.OrderBy(other => ColorDistance(color, other));
         int index = Mathf.Max(System.Array.IndexOf(world.palette, ranking.First()), 0);
 
-        return (byte) index;
+        return (byte)index;
     }
 
     private byte ColorToPaletteFast(Color color)
     {
         int index = Mathf.Max(System.Array.IndexOf(world.palette, color), 0);
 
-        return (byte) index;
+        return (byte)index;
     }
 
     private byte[][] TileInChunksMessages(World world,
@@ -1281,7 +1281,7 @@ public class Test : MonoBehaviour
             writer.Write((int)Type.TileChunk);
             writer.Write(tile);
             writer.Write(offset);
-            writer.WriteBytesFull(chunk);
+            writer.WriteBytesFull(CrunchBytes(chunk));
 
             messages.Add(writer.AsArray());
 
@@ -1291,48 +1291,53 @@ public class Test : MonoBehaviour
         return messages.ToArray();
     }
 
-    private void SendTileInChunks(int connectionID,
-                                  World world,
-                                  byte tile,
-                                  int size = 128)
+    private byte[] CrunchBytes(byte[] bytes)
     {
-        int x = tile % 16;
-        int y = tile / 16;
+        byte[] crunched = new byte[bytes.Length / 2];
 
-        Color[] colors = world.tileset.GetPixels(x * 32, y * 32, 32, 32);
-        byte[] bytes = colors.Select(c => ColorToPalette(c)).ToArray();
-        byte[] chunk;
-
-        int offset = 0;
-
-        while (bytes.Any())
+        for (int i = 0; i < crunched.Length; ++i)
         {
-            chunk = bytes.Take(size).ToArray();
-            bytes = bytes.Skip(size).ToArray();
+            byte a = bytes[i * 2 + 0];
+            byte b = bytes[i * 2 + 1];
 
-            var writer = new NetworkWriter();
-            writer.Write((int) Type.TileChunk);
-            writer.Write(tile);
-            writer.Write(offset);
-            writer.WriteBytesFull(chunk);
-
-            Send(connectionID, writer.AsArray());
-
-            offset += size;
+            crunched[i] = (byte) ((a << 4) | b); 
         }
+
+        return crunched;
+    }
+
+    private byte[] UncrunchBytes(byte[] crunched)
+    {
+        byte[] bytes = new byte[crunched.Length * 2];
+        
+        for (int i = 0; i < crunched.Length; ++i)
+        {
+            byte a = (byte) ((crunched[i] & 0xF0) >> 4);
+            byte b = (byte) (crunched[i] & 0xF);
+
+            bytes[i * 2 + 0] = a;
+            bytes[i * 2 + 1] = b;
+        }
+
+        return bytes;
     }
 
     private void ReceiveTileChunk(NetworkReader reader, int connectionID)
     {
         byte tile = reader.ReadByte();
         int offset = reader.ReadInt32();
-        byte[] chunk = reader.ReadBytesAndSize();
+        byte[] chunk = UncrunchBytes(reader.ReadBytesAndSize());
 
         int x = tile % 16;
         int y = tile / 16;
 
+        bool locked = locks.ContainsKey(tile);
+
         // if we're the host, disallow chunks not send by someone with a lock
-        if (hosting && (!locks.ContainsKey(tile) || locks[tile].id != connectionID)) return;
+        if (hosting && (!locked || locks[tile].id != connectionID)) return;
+
+        // we're editing this tile, so ignore it
+        if (locked && locks[tile] == worldView.viewer) return;
 
         Color[] colors = world.tileset.GetPixels(x * 32, y * 32, 32, 32);
 
