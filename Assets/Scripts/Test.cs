@@ -61,18 +61,26 @@ public class Test : MonoBehaviour
     [SerializeField] private GameObject paletteObject;
     [SerializeField] private RectTransform paletteContainer;
     [SerializeField] private TileToggle tilePrefab;
+    [SerializeField] private Button lockButton;
+
+    [SerializeField] private TileEditor tileEditor;
+
     private MonoBehaviourPooler<byte, TileToggle> tiles;
 
     private NetworkMatch match;
 
     private byte paintTile;
 
+    private const byte maxTiles = 32;
+
     public enum Version
     {
         PRE1,
+        PRE2,
+        PRE3,
     }
 
-    public static Version version = Version.PRE1;
+    public static Version version = Version.PRE3;
 
     private void Awake()
     {
@@ -169,11 +177,34 @@ public class Test : MonoBehaviour
         tiles = new MonoBehaviourPooler<byte, TileToggle>(tilePrefab,
                                                           paletteContainer,
                                                           InitialiseTileToggle);
+
+        lockButton.onClick.AddListener(delegate
+        {
+            RequestTile(paintTile);
+
+            RefreshLockButtons();
+        });
+
+        RefreshLockButtons();
+    }
+
+    private void RefreshLockButtons()
+    {
+        bool locked = locks.ContainsKey(paintTile);
+
+        lockButton.interactable = !locks.ContainsKey(paintTile);
+    }
+
+    private void SetPaintTile(byte tile)
+    {
+        paintTile = tile;
+
+        RefreshLockButtons();
     }
 
     private void InitialiseTileToggle(byte tile, TileToggle toggle)
     {
-        toggle.SetTile(world.tiles[tile], () => paintTile = tile);
+        toggle.SetTile(world.tiles[tile], () => SetPaintTile(tile));
     }
 
     private int GetVersion(MatchDesc desc)
@@ -324,6 +355,7 @@ public class Test : MonoBehaviour
         Walls,
 
         TileImage,
+        TileChunk,
 
         ReplicateAvatar,
         DestroyAvatar,
@@ -334,6 +366,8 @@ public class Test : MonoBehaviour
 
         SetTile,
         SetWall,
+
+        LockTile,
     }
 
 
@@ -415,6 +449,17 @@ public class Test : MonoBehaviour
 
         if (hosting)
         {
+            var unlock = locks.Where(pair => pair.Value == avatar)
+                              .Select(pair => pair.Key)
+                              .ToArray();
+
+            foreach (byte tile in unlock)
+            {
+                locks.Remove(tile);
+
+                SendAll(LockTileMessage(null, tile));
+            }
+
             SendAll(DestroyAvatarMessage(avatar), 0);
         }
 
@@ -572,6 +617,8 @@ public class Test : MonoBehaviour
                 world.walls.Remove(tile);
             }
         }
+
+        worldView.RefreshWalls();
     }
 
     private byte[] SetWallMessage(byte tile, bool wall)
@@ -582,6 +629,92 @@ public class Test : MonoBehaviour
         writer.Write(wall);
 
         return writer.AsArray();
+    }
+
+    private byte[] LockTileMessage(World.Avatar avatar, byte tile)
+    {
+        var writer = new NetworkWriter();
+        writer.Write((int) Type.LockTile);
+        writer.Write(avatar != null ? avatar.id : -1);
+        writer.Write(tile);
+
+        return writer.AsArray();
+    }
+
+    public void RequestTile(byte tile)
+    {
+        if (locks.ContainsKey(tile)) return;
+
+        if (hosting)
+        {
+            locks[tile] = worldView.viewer;
+
+            OpenForEdit(tile);
+        }
+
+        SendAll(LockTileMessage(worldView.viewer, tile));
+    }
+
+    public void ReleaseTile(byte tile)
+    {
+        if (!locks.ContainsKey(tile)
+         || locks[tile] != worldView.viewer) return;
+
+        if (hosting)
+        {
+            locks.Remove(tile);
+        }
+
+        SendAll(LockTileMessage(null, tile));
+
+        RefreshLockButtons();
+    }
+
+    private void OpenForEdit(byte tile)
+    {
+        tileEditor.OpenAndEdit(world.tiles[tile], delegate
+        {
+            foreach (int id in connectionIDs)
+            {
+                SendTileInChunks(id, world, tile);
+            }
+
+            ReleaseTile(tile);
+        });
+    }
+
+    private void ReceiveLockTile(NetworkReader reader)
+    {
+        World.Avatar avatar = ID2Avatar(reader.ReadInt32());
+        byte tile = reader.ReadByte();
+
+        if (avatar != null)
+        {
+            Debug.LogFormat("{0} locking {1}", avatar.id, tile);
+
+            locks[tile] = avatar;
+
+            if (avatar == worldView.viewer) OpenForEdit(tile);
+
+            if (hosting) SendAll(LockTileMessage(avatar, tile));
+        }
+        else if (locks.ContainsKey(tile))
+        {
+            Debug.LogFormat("unlocking {0}", tile);
+
+            locks.Remove(tile);
+
+            if (hosting) SendAll(LockTileMessage(null, tile));
+        }
+
+        RefreshLockButtons();
+    }
+
+    public World.Avatar ID2Avatar(int id)
+    {
+        if (id == -1) return null; 
+
+        return world.avatars.Where(a => a.id == id).First();
     }
 
     private bool Blocked(World.Avatar avatar,
@@ -620,6 +753,8 @@ public class Test : MonoBehaviour
     }
 
     private Queue<Message> sends = new Queue<Message>();
+    private Dictionary<byte, World.Avatar> locks
+        = new Dictionary<byte, World.Avatar>();
 
     private IEnumerator SendMessages()
     {
@@ -664,86 +799,109 @@ public class Test : MonoBehaviour
         worldView.Chat(avatar, message);
     }
 
+    private void Scramble(byte tile)
+    {
+        int x = tile % 16;
+        int y = tile / 16;
+
+        Color[] colors = world.tileset.GetPixels(x * 32, y * 32, 32, 32)
+                                      .OrderBy(c => Random.value)
+                                      .ToArray();
+
+        world.tileset.SetPixels(x * 32, y * 32, 32, 32, colors);
+        world.tileset.Apply();
+    }
+
     private void Update()
     {
         GameObject selected = UnityEngine.EventSystems.EventSystem.current.currentSelectedGameObject;
 
         if (hostID == -1) return;
 
-        if (Input.GetKey(KeyCode.UpArrow))
-        {
-            Move(Vector2.up);
-        }
-        else if (Input.GetKey(KeyCode.LeftArrow))
-        {
-            Move(Vector2.left);
-        }
-        else if (Input.GetKey(KeyCode.RightArrow))
-        {
-            Move(Vector2.right);
-        }
-        else if (Input.GetKey(KeyCode.DownArrow))
-        {
-            Move(Vector2.down);
-        }
-        else if (Input.GetKeyDown(KeyCode.Return))
-        {
-            if (chatObject.activeSelf)
+        bool editing = tileEditor.gameObject.activeSelf;
+
+        if (!chatObject.activeSelf
+         && !editing)
+        { 
+            if (Input.GetKey(KeyCode.UpArrow) || Input.GetKey(KeyCode.W))
             {
-                string message = chatInput.text;
+                Move(Vector2.up);
+            }
+            else if (Input.GetKey(KeyCode.LeftArrow) || Input.GetKey(KeyCode.A))
+            {
+                Move(Vector2.left);
+            }
+            else if (Input.GetKey(KeyCode.RightArrow) || Input.GetKey(KeyCode.D))
+            {
+                Move(Vector2.right);
+            }
+            else if (Input.GetKey(KeyCode.DownArrow) || Input.GetKey(KeyCode.S))
+            {
+                Move(Vector2.down);
+            }
+        }
 
-                chatObject.SetActive(false);
-                chatInput.text = "";
-
-                var match = Regex.Match(message, @"wall\s(\d+)\s+([yn])");
-
-                if (match.Success)
+        if (!editing)
+        {
+            if (Input.GetKeyDown(KeyCode.Return))
+            {
+                if (chatObject.activeSelf)
                 {
-                    byte tile = byte.Parse(match.Groups[1].Value);
-                    bool wall = match.Groups[2].Value == "y";
+                    string message = chatInput.text;
 
-                    if (world.walls.Contains(tile) != wall)
+                    chatObject.SetActive(false);
+                    chatInput.text = "";
+
+                    var unlock = Regex.Match(message, @"(lock|unlock)\s(\d+)");
+
+                    if (unlock.Success)
                     {
-                        SendAll(SetWallMessage(tile, wall));
+                        byte tile = byte.Parse(unlock.Groups[2].Value);
+                        bool @lock = unlock.Groups[1].Value == "lock";
 
-                        audio.PlayOneShot(placeSound);
-
-                        if (wall)
+                        if (@lock && !locks.ContainsKey(tile))
                         {
-                            world.walls.Add(tile);
+                            RequestTile(tile);
+                            audio.PlayOneShot(placeSound);
                         }
-                        else
+                        else if (!@lock && locks.ContainsKey(tile) && locks[tile] == worldView.viewer)
                         {
-                            world.walls.Remove(tile);
+                            ReleaseTile(tile);
+                            audio.PlayOneShot(placeSound);
                         }
                     }
+                    else if (message.Trim().Length > 0)
+                    {
+                        SendAll(ChatMessage(worldView.viewer, message));
+
+                        if (hosting) Chat(worldView.viewer, message);
+                    }
+
+                    UnityEngine.EventSystems.EventSystem.current.SetSelectedGameObject(null);
                 }
-                else if (message.Trim().Length > 0)
+                else
                 {
-                    SendAll(ChatMessage(worldView.viewer, message));
+                    chatObject.SetActive(true);
+                    chatInput.text = "";
 
-                    if (hosting) Chat(worldView.viewer, message);
+                    chatInput.Select();
                 }
-
-                UnityEngine.EventSystems.EventSystem.current.SetSelectedGameObject(null);
             }
-            else
+            else if (chatObject.activeSelf && selected != chatInput.gameObject)
             {
-                chatObject.SetActive(true);
-                chatInput.text = "";
-
-                chatInput.Select();
+                chatObject.SetActive(false);
             }
         }
-        else if (chatObject.activeSelf && selected != chatInput.gameObject)
+        else
         {
             chatObject.SetActive(false);
+            UnityEngine.EventSystems.EventSystem.current.SetSelectedGameObject(null);
         }
 
-        if (!chatObject.activeSelf && Input.GetKey(KeyCode.Space))
+        if (!chatObject.activeSelf && !editing && Input.GetKey(KeyCode.Space))
         {
             tiles.Clear();
-            tiles.SetActive(Enumerable.Range(0, 24).Select(i => (byte) i));
+            tiles.SetActive(Enumerable.Range(0, maxTiles).Select(i => (byte) i));
             paletteObject.SetActive(true);
         }
         else
@@ -752,9 +910,11 @@ public class Test : MonoBehaviour
         }
 
         if (!UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject()
-         && Rect.MinMaxRect(0, 0, 512, 512).Contains(Input.mousePosition))
+         && Rect.MinMaxRect(0, 0, 512, 512).Contains(Input.mousePosition)
+         && !editing)
         {
             bool picker = Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt);
+            bool waller = !picker && (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift));
 
             tileCursor.gameObject.SetActive(true);
             pickerCursor.SetActive(picker);
@@ -776,20 +936,42 @@ public class Test : MonoBehaviour
             byte tile = paintTile;
             int location = (y + 16) * 32 + (x + 16);
 
-            if (location > 0 
-             && location < 1024 
-             && Input.GetMouseButton(0))
+            if (location > 0
+             && location < 1024)
             {
-                if (!picker && this.world.tilemap[location] != tile)
+                if (waller && Input.GetMouseButtonDown(0))
                 {
-                    audio.PlayOneShot(placeSound);
-                    worldView.SetTile(location, tile);
+                    tile = this.world.tilemap[location];
+                    bool wall = !this.world.walls.Contains(tile);
 
-                    SendAll(SetTileMessage(location, tile));
+                    SendAll(SetWallMessage(tile, wall));
+
+                    audio.PlayOneShot(placeSound);
+
+                    if (wall)
+                    {
+                        this.world.walls.Add(tile);
+                    }
+                    else
+                    {
+                        this.world.walls.Remove(tile);
+                    }
+
+                    worldView.RefreshWalls();
                 }
-                else
+                else if (!waller && Input.GetMouseButton(0))
                 {
-                    paintTile = this.world.tilemap[location];
+                    if (!picker && this.world.tilemap[location] != tile)
+                    {
+                        audio.PlayOneShot(placeSound);
+                        worldView.SetTile(location, tile);
+
+                        SendAll(SetTileMessage(location, tile));
+                    }
+                    else if (picker)
+                    {
+                        paintTile = this.world.tilemap[location];
+                    }
                 }
             }
         }
@@ -850,7 +1032,7 @@ public class Test : MonoBehaviour
             {
                 var reader = new NetworkReader(recvBuffer);
 
-                { 
+                {
                     Type type = (Type)reader.ReadInt32();
 
                     if (type == Type.Tilemap)
@@ -908,7 +1090,7 @@ public class Test : MonoBehaviour
 
                         if (hosting)
                         {
-                            if (connectionID == avatar.id 
+                            if (connectionID == avatar.id
                              && !Blocked(avatar, dest))
                             {
                                 avatar.source = avatar.destination;
@@ -957,6 +1139,14 @@ public class Test : MonoBehaviour
                     else if (type == Type.SetWall)
                     {
                         ReceiveSetWall(reader);
+                    }
+                    else if (type == Type.TileChunk)
+                    {
+                        ReceiveTileChunk(reader, connectionID);
+                    }
+                    else if (type == Type.LockTile)
+                    {
+                        ReceiveLockTile(reader);
                     }
                 }
             }
@@ -1008,30 +1198,66 @@ public class Test : MonoBehaviour
                                               out error);
     }
 
-    private bool SendTileImage(int connectionID, 
-                               World world, 
-                               byte tile,
-                               out byte error)
+    private void SendTileInChunks(int connectionID,
+                                  World world,
+                                  byte tile,
+                                  int size = 128)
     {
-        var writer = new NetworkWriter();
-
-        writer.Write((int) Type.TileImage);
-        writer.Write(tile);
-
         int x = tile % 16;
         int y = tile / 16;
 
         Color[] colors = world.tileset.GetPixels(x * 32, y * 32, 32, 32);
         byte[] bytes = colors.Select(color => col2pal[color]).ToArray();
+        byte[] chunk;
 
-        writer.WriteBytesFull(bytes);
+        int offset = 0;
 
-        return NetworkTransport.Send(hostID,
-                                     connectionID,
-                                     1,
-                                     writer.AsArray(),
-                                     writer.Position,
-                                     out error);
+        while (bytes.Any())
+        {
+            chunk = bytes.Take(size).ToArray();
+            bytes = bytes.Skip(size).ToArray();
+
+            var writer = new NetworkWriter();
+            writer.Write((int) Type.TileChunk);
+            writer.Write(tile);
+            writer.Write(offset);
+            writer.WriteBytesFull(chunk);
+
+            Send(connectionID, writer.AsArray());
+
+            offset += size;
+        }
+    }
+
+    private void ReceiveTileChunk(NetworkReader reader, int connectionID)
+    {
+        byte tile = reader.ReadByte();
+        int offset = reader.ReadInt32();
+        byte[] chunk = reader.ReadBytesAndSize();
+
+        int x = tile % 16;
+        int y = tile / 16;
+
+        // if we're the host, disallow chunks not send by someone with a lock
+        if (hosting && (!locks.ContainsKey(tile) || locks[tile].id != connectionID)) return;
+
+        Color[] colors = world.tileset.GetPixels(x * 32, y * 32, 32, 32);
+
+        for (int i = 0; i < chunk.Length; ++i)
+        {
+            colors[i + offset] = pal2col[chunk[i]];
+        }
+
+        world.tileset.SetPixels(x * 32, y * 32, 32, 32, colors);
+        world.tileset.Apply();
+
+        if (hosting)
+        {
+            foreach (int id in connectionIDs)
+            {
+                SendTileInChunks(id, world, tile);
+            }
+        }
     }
 
     private IEnumerator SendWorld(int connectionID, World world)
@@ -1065,16 +1291,11 @@ public class Test : MonoBehaviour
             }
         }
 
-        byte error;
-
-        for (int i = 0; i < 24; ++i)
+        for (int i = 0; i < maxTiles; ++i)
         {
-            while (!SendTileImage(connectionID, world, (byte) i, out error))
-            {
-                yield return null;
-            };
+            SendTileInChunks(connectionID, world, (byte) i);
 
-            yield return new WaitForSeconds(0.1f);
+            //yield return new WaitForSeconds(0.1f);
         }
 
         yield break;

@@ -15,7 +15,11 @@ public class WorldView : MonoBehaviour
     [SerializeField] private AvatarView avatarPrefab;
     [SerializeField] private Transform avatarContainer;
 
+    [SerializeField] private Image wallPrefab;
+    [SerializeField] private Transform wallContainer;
+
     private Image[] tiles;
+    private Image[] walls;
 
     private MonoBehaviourPooler<World.Avatar, AvatarView> avatars;
 
@@ -33,6 +37,7 @@ public class WorldView : MonoBehaviour
                                                                     InitialiseAvatar);
 
         tiles = new Image[1024];
+        walls = new Image[1024];
 
         for (int i = 0; i < 1024; ++i)
         {
@@ -46,6 +51,12 @@ public class WorldView : MonoBehaviour
             tile.gameObject.SetActive(true);
 
             tiles[i] = tile;
+
+            Image wall = Instantiate(wallPrefab);
+            wall.transform.SetParent(wallContainer, false);
+            wall.transform.localPosition = new Vector2(x * 32 - 512, y * 32 - 512);
+
+            walls[i] = wall;
         }
     }
 
@@ -68,11 +79,23 @@ public class WorldView : MonoBehaviour
         }
 
         RefreshAvatars();
+        RefreshWalls();
     }
 
     public void RefreshAvatars()
     {
         avatars.SetActive(world.avatars);
+    }
+
+    public void RefreshWalls()
+    {
+        for (int i = 0; i < 1024; ++i)
+        {
+            byte tile = world.tilemap[i];
+            bool wall = world.walls.Contains(tile);
+
+            walls[i].gameObject.SetActive(wall);
+        }
     }
 
     public void Chat(World.Avatar avatar, string message)
@@ -84,6 +107,8 @@ public class WorldView : MonoBehaviour
     {
         world.tilemap[location] = tile;
         tiles[location].sprite = world.tiles[tile];
+
+        RefreshWalls();
     }
 
     private void Update()
@@ -106,6 +131,8 @@ public class WorldView : MonoBehaviour
                                                 -10);
 
         float period = 0.25f;
+
+        wallContainer.gameObject.SetActive(Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift));
 
         avatars.MapActive((a, v) =>
         {
