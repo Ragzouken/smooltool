@@ -6,6 +6,8 @@ using System.Linq;
 using System.Collections;
 using System.Collections.Generic;
 
+using PixelDraw;
+
 public class TileEditor : MonoBehaviour 
 {
     [SerializeField] private Button saveButton;
@@ -20,6 +22,10 @@ public class TileEditor : MonoBehaviour
         saveButton.onClick.AddListener(OnClickedSave);
     }
 
+    private Vector2 prevCursor;
+    private Vector2 currCursor;
+    private bool drawing;
+
     private void Update()
     {
         var ttrans = tileImage.transform as RectTransform;
@@ -30,19 +36,35 @@ public class TileEditor : MonoBehaviour
                                                                 Input.mousePosition,
                                                                 null,
                                                                 out cursor);
-
+        
         cursor /= 7f;
         cursor.x = Mathf.Floor(cursor.x);
         cursor.y = Mathf.Floor(cursor.y);
 
         if (Input.GetMouseButton(0))
         {
-            int x = (int) (cursor.x + tileImage.sprite.textureRect.xMin);
-            int y = (int) (cursor.y + tileImage.sprite.textureRect.yMin);
+            prevCursor = currCursor;
+            currCursor = cursor;
 
-            tileImage.sprite.texture.SetPixel(x, y, Color.magenta);
+            if (drawing)
+            {
+                using (Brush line = Brush.Line(prevCursor, 
+                                               currCursor, 
+                                               Color.magenta, 
+                                               3))
+                {
+                    Brush.Apply(line,
+                                Vector2.zero,
+                                tileImage.sprite,
+                                Point.Zero,
+                                Blend.Alpha);
+                }
+            }
+
             tileImage.sprite.texture.Apply();
         }
+
+        drawing = Input.GetMouseButton(0);
     }
 
     public void OpenAndEdit(Sprite sprite, Action save)
