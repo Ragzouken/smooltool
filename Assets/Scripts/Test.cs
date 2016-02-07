@@ -100,23 +100,6 @@ public class Test : MonoBehaviour
 
         Application.runInBackground = true;
 
-        byte index = 0;
-
-        Color32[] colors = testtex.GetPixels32();
-
-        for (int i = 0; i < colors.Length; ++i)
-        {
-            Color32 color = colors[i];
-
-            if (!col2pal.ContainsKey(color))
-            {
-                col2pal.Add(color, index);
-                pal2col.Add(index, color);
-
-                index += 1;
-            }
-        }
-
         StartCoroutine(SendMessages());
     }
 
@@ -320,8 +303,17 @@ public class Test : MonoBehaviour
 
         this.hosting = hosting;
 
+        col2pal.Clear();
+        pal2col.Clear();
+
         if (hosting)
         {
+            for (int i = 0; i < 16; ++i)
+            {
+                col2pal[world.palette[i]] = (byte)i;
+                pal2col[(byte)i] = world.palette[i];
+            }
+
             var colors = testtex.GetPixels(0, 0, 512, 64)
                                 .Select(color => ColorToPalette(color))
                                 .Select(index => world.palette[index])
@@ -329,12 +321,6 @@ public class Test : MonoBehaviour
 
             world.tileset.SetPixels(0, 0, 512, 64, colors);
             world.tileset.Apply();
-
-            for (int i = 0; i < 16; ++i)
-            {
-                col2pal[world.palette[i]] = (byte)i;
-                pal2col[(byte)i] = world.palette[i];
-            }
 
             AddAvatar(new World.Avatar
             {
@@ -804,6 +790,11 @@ public class Test : MonoBehaviour
                     {
                         Debug.LogFormat("CANT: {0}", (NetworkError)error);
 
+                        if ((NetworkError) error == NetworkError.WrongConnection)
+                        {
+                            break;
+                        }
+
                         yield return null;
                     }
                 }
@@ -824,19 +815,6 @@ public class Test : MonoBehaviour
         audio.PlayOneShot(speakSound);
 
         worldView.Chat(avatar, message);
-    }
-
-    private void Scramble(byte tile)
-    {
-        int x = tile % 16;
-        int y = tile / 16;
-
-        Color[] colors = world.tileset.GetPixels(x * 32, y * 32, 32, 32)
-                                      .OrderBy(c => Random.value)
-                                      .ToArray();
-
-        world.tileset.SetPixels(x * 32, y * 32, 32, 32, colors);
-        world.tileset.Apply();
     }
 
     private void Update()
@@ -1235,24 +1213,27 @@ public class Test : MonoBehaviour
                                               out error);
     }
 
-    private float ColorDistance(Color a, Color b)
+    private int ColorDistance(Color32 a, Color32 b)
     {
         return Mathf.Abs(a.r - b.r)
              + Mathf.Abs(a.g - b.g)
              + Mathf.Abs(a.b - b.b);
     }
 
+    private float max = 0;
+
     private byte ColorToPalette(Color color)
     {
-        var ranking = world.palette.OrderBy(other => ColorDistance(color, other));
-        int index = Mathf.Max(System.Array.IndexOf(world.palette, ranking.First()), 0);
-
-        return (byte)index;
+        Color nearest = world.palette.OrderBy(other => ColorDistance(color, other)).First();
+        int index = Mathf.Max(System.Array.IndexOf(world.palette, nearest), 0);
+        
+        return (byte) index;
     }
 
     private byte ColorToPaletteFast(Color color)
     {
-        int index = Mathf.Max(System.Array.IndexOf(world.palette, color), 0);
+        Color nearest = world.palette.FirstOrDefault(other => ColorDistance(color, other) <= 3);
+        int index = Mathf.Max(System.Array.IndexOf(world.palette, nearest), 0);
 
         return (byte)index;
     }
@@ -1265,7 +1246,7 @@ public class Test : MonoBehaviour
         int y = tile / 16;
 
         Color[] colors = world.tileset.GetPixels(x * 32, y * 32, 32, 32);
-        byte[] bytes = colors.Select(c => ColorToPalette(c)).ToArray();
+        byte[] bytes = colors.Select(c => ColorToPaletteFast(c)).ToArray();
         byte[] chunk;
 
         int offset = 0;

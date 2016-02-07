@@ -60,6 +60,8 @@ public class TileEditor : MonoBehaviour
     private Color brushColor = Color.magenta;
     private int brushSize = 3;
 
+    private float lastSaveTime;
+
     private void Update()
     {
         var ttrans = tileImage.transform as RectTransform;
@@ -113,6 +115,11 @@ public class TileEditor : MonoBehaviour
 
             tileImage.sprite.texture.Apply();
         }
+        else if (drawing)
+        {
+            Save();
+            lastSaveTime = Time.timeSinceLevelLoad;
+        }
 
         drawing = (drawing || inside) && Input.GetMouseButton(0);
     }
@@ -152,9 +159,15 @@ public class TileEditor : MonoBehaviour
     {
         while (true)
         {
-            yield return new WaitForSeconds(5);
+            float dt = Time.timeSinceLevelLoad - lastSaveTime;
 
-            Save();
+            if (dt > 1)
+            {
+                Save();
+                lastSaveTime = Time.timeSinceLevelLoad;
+            }
+
+            yield return null;
         }
     }
 }
