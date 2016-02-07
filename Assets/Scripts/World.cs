@@ -20,6 +20,7 @@ public class World
     public byte[] tilemap;
     public HashSet<byte> walls = new HashSet<byte>();
     public List<Avatar> avatars = new List<Avatar>();
+    public Color[] palette;
 
     private static Color32[] colors =
     {
@@ -36,6 +37,12 @@ public class World
 
         tiles = new Sprite[256];
         tilemap = new byte[1024];
+        palette = new Color[16];
+
+        for (int i = 0; i < 16; ++i)
+        {
+            palette[i] = new Color(Random.value, Random.value, Random.value, 1);
+        }
 
         for (int i = 0; i < 256; ++i)
         {

@@ -12,19 +12,52 @@ public class TileEditor : MonoBehaviour
 {
     [SerializeField] private Button saveButton;
     [SerializeField] private Image tileImage;
+    [SerializeField] private Image brushCursor;
+
+    [SerializeField] private Toggle[] sizeToggles; 
+    [SerializeField] private Toggle[] colorToggles;
 
     private Action Save;
+    private World world;
 
     private void Awake()
     {
         gameObject.SetActive(false);
 
         saveButton.onClick.AddListener(OnClickedSave);
+
+        for (int i = 0; i < sizeToggles.Length; ++i)
+        {
+            Toggle sizeToggle = sizeToggles[i];
+            int size = i + 1;
+
+            sizeToggle.onValueChanged.AddListener(active =>
+            {
+                brushSize = size;
+            });
+        }
+
+        for (int i = 0; i < colorToggles.Length; ++i)
+        {
+            Toggle sizeToggle = colorToggles[i];
+
+            int index = i;
+
+            sizeToggle.onValueChanged.AddListener(active =>
+            {
+                brushColor = world.palette[index];
+            });
+        }
     }
 
     private Vector2 prevCursor;
     private Vector2 currCursor;
     private bool drawing;
+
+    private Brush cursorBrush;
+
+    private Color brushColor = Color.magenta;
+    private int brushSize = 3;
 
     private void Update()
     {
@@ -41,6 +74,22 @@ public class TileEditor : MonoBehaviour
         cursor.x = Mathf.Floor(cursor.x);
         cursor.y = Mathf.Floor(cursor.y);
 
+        if (cursorBrush != null) Brush.Dispose(cursorBrush);
+
+        cursorBrush = Brush.Circle(brushSize, brushColor);
+        cursorBrush.sprite.texture.Apply();
+
+        var btrans = brushCursor.transform as RectTransform;
+
+        brushCursor.sprite = cursorBrush;
+        brushCursor.SetNativeSize();
+        btrans.pivot = new Vector2(cursorBrush.sprite.pivot.x / cursorBrush.sprite.rect.width,
+                                   cursorBrush.sprite.pivot.y / cursorBrush.sprite.rect.height);
+        btrans.anchoredPosition = cursor * 7;
+        btrans.localScale = Vector3.one * 7 * 0.01f;
+
+        bool inside = Rect.MinMaxRect(0, 0, 32, 32).Contains(cursor);
+
         if (Input.GetMouseButton(0))
         {
             prevCursor = currCursor;
@@ -49,9 +98,9 @@ public class TileEditor : MonoBehaviour
             if (drawing)
             {
                 using (Brush line = Brush.Line(prevCursor, 
-                                               currCursor, 
-                                               Color.magenta, 
-                                               3))
+                                               currCursor,
+                                               brushColor,
+                                               brushSize))
                 {
                     Brush.Apply(line,
                                 Vector2.zero,
@@ -64,15 +113,26 @@ public class TileEditor : MonoBehaviour
             tileImage.sprite.texture.Apply();
         }
 
-        drawing = Input.GetMouseButton(0);
+        drawing = (drawing || inside) && Input.GetMouseButton(0);
     }
 
-    public void OpenAndEdit(Sprite sprite, Action save)
+    public void OpenAndEdit(World world,
+                            Sprite sprite, 
+                            Action save)
     {
         gameObject.SetActive(true);
 
+        this.world = world;
         tileImage.sprite = sprite;
         Save = save;
+
+        for (int i = 0; i < colorToggles.Length; ++i)
+        {
+            Toggle sizeToggle = colorToggles[i];
+            Color color = world.palette[i];
+
+            sizeToggle.GetComponent<Image>().color = color;
+        }
     }
 
     private void OnClickedSave()

@@ -320,8 +320,19 @@ public class Test : MonoBehaviour
 
         if (hosting)
         {
-            world.tileset.SetPixels32(testtex.GetPixels32());
+            var colors = testtex.GetPixels(0, 0, 512, 64)
+                                .Select(color => ColorToPalette(color))
+                                .Select(index => world.palette[index])
+                                .ToArray();
+
+            world.tileset.SetPixels(0, 0, 512, 64, colors);
             world.tileset.Apply();
+
+            for (int i = 0; i < 16; ++i)
+            {
+                col2pal[world.palette[i]] = (byte) i;
+                pal2col[(byte) i] = world.palette[i];
+            }
 
             AddAvatar(new World.Avatar
             {
@@ -353,6 +364,7 @@ public class Test : MonoBehaviour
         Tileset,
         Tilemap,
         Walls,
+        Palette,
 
         TileImage,
         TileChunk,
@@ -392,7 +404,7 @@ public class Test : MonoBehaviour
             avatar = avatar,
         });
 
-        StartCoroutine(SendWorld(connectionID, world));
+        SendWorld(connectionID, world);
     }
 
     private void OnConnectedToHost(int connectionID)
@@ -467,6 +479,14 @@ public class Test : MonoBehaviour
         worldView.RefreshAvatars();
     }
 
+    private void Send(int connectionID, byte[][] data, int channelID = 0)
+    {
+        for (int i = 0; i < data.Length; ++i)
+        {
+            Send(connectionID, data[i], channelID);
+        }
+    }
+
     private void Send(int connectionID, byte[] data, int channelID = 0)
     {
         sends.Enqueue(new Message
@@ -475,6 +495,16 @@ public class Test : MonoBehaviour
             connections = new int[] { connectionID },
             data = data,
         });
+    }
+
+    private void SendAll(byte[][] data,
+                         int channelID = 0,
+                         int except = -1)
+    {
+        for (int i = 0; i < data.Length; ++i)
+        {
+            SendAll(data[i], channelID, except);
+        }
     }
 
     private void SendAll(byte[] data, 
@@ -672,12 +702,9 @@ public class Test : MonoBehaviour
 
     private void OpenForEdit(byte tile)
     {
-        tileEditor.OpenAndEdit(world.tiles[tile], delegate
+        tileEditor.OpenAndEdit(world, world.tiles[tile], delegate
         {
-            foreach (int id in connectionIDs)
-            {
-                SendTileInChunks(id, world, tile);
-            }
+            SendAll(TileInChunksMessages(world, tile));
 
             ReleaseTile(tile);
         });
@@ -783,7 +810,7 @@ public class Test : MonoBehaviour
 
                 Type type = (Type) (new NetworkReader(message.data).ReadInt32());
 
-                Debug.LogFormat("SENT: {0}", type);
+                //Debug.LogFormat("SENT: {0}", type);
             }
             else
             {
@@ -1040,6 +1067,16 @@ public class Test : MonoBehaviour
                         world.tilemap = reader.ReadBytesAndSize();
                         worldView.SetWorld(world);
                     }
+                    else if (type == Type.Palette)
+                    {
+                        for (int i = 0; i < 16; ++i)
+                        {
+                            world.palette[i] = reader.ReadColor32();
+
+                            col2pal[world.palette[i]] = (byte) i;
+                            pal2col[(byte) i] = world.palette[i];
+                        }
+                    }
                     else if (type == Type.Walls)
                     {
                         world.walls.Clear();
@@ -1198,6 +1235,62 @@ public class Test : MonoBehaviour
                                               out error);
     }
 
+    private float ColorDistance(Color a, Color b)
+    {
+        return Mathf.Abs(a.r - b.r)
+             + Mathf.Abs(a.g - b.g)
+             + Mathf.Abs(a.b - b.b);
+    }
+
+    private byte ColorToPalette(Color color)
+    {
+        var ranking = world.palette.OrderBy(other => ColorDistance(color, other));
+        int index = Mathf.Max(System.Array.IndexOf(world.palette, ranking.First()), 0);
+
+        return (byte) index;
+    }
+
+    private byte ColorToPaletteFast(Color color)
+    {
+        int index = Mathf.Max(System.Array.IndexOf(world.palette, color), 0);
+
+        return (byte) index;
+    }
+
+    private byte[][] TileInChunksMessages(World world,
+                                          byte tile,
+                                          int size = 128)
+    {
+        int x = tile % 16;
+        int y = tile / 16;
+
+        Color[] colors = world.tileset.GetPixels(x * 32, y * 32, 32, 32);
+        byte[] bytes = colors.Select(c => ColorToPalette(c)).ToArray();
+        byte[] chunk;
+
+        int offset = 0;
+
+        var messages = new List<byte[]>();
+
+        while (bytes.Any())
+        {
+            chunk = bytes.Take(size).ToArray();
+            bytes = bytes.Skip(size).ToArray();
+
+            var writer = new NetworkWriter();
+            writer.Write((int)Type.TileChunk);
+            writer.Write(tile);
+            writer.Write(offset);
+            writer.WriteBytesFull(chunk);
+
+            messages.Add(writer.AsArray());
+
+            offset += size;
+        }
+
+        return messages.ToArray();
+    }
+
     private void SendTileInChunks(int connectionID,
                                   World world,
                                   byte tile,
@@ -1207,7 +1300,7 @@ public class Test : MonoBehaviour
         int y = tile / 16;
 
         Color[] colors = world.tileset.GetPixels(x * 32, y * 32, 32, 32);
-        byte[] bytes = colors.Select(color => col2pal[color]).ToArray();
+        byte[] bytes = colors.Select(c => ColorToPalette(c)).ToArray();
         byte[] chunk;
 
         int offset = 0;
@@ -1245,7 +1338,7 @@ public class Test : MonoBehaviour
 
         for (int i = 0; i < chunk.Length; ++i)
         {
-            colors[i + offset] = pal2col[chunk[i]];
+            colors[i + offset] = world.palette[chunk[i]];
         }
 
         world.tileset.SetPixels(x * 32, y * 32, 32, 32, colors);
@@ -1253,21 +1346,27 @@ public class Test : MonoBehaviour
 
         if (hosting)
         {
-            foreach (int id in connectionIDs)
-            {
-                SendTileInChunks(id, world, tile);
-            }
+            SendAll(TileInChunksMessages(world, tile));
         }
     }
 
-    private IEnumerator SendWorld(int connectionID, World world)
+    private void SendWorld(int connectionID, World world)
     {
         {
             var writer = new NetworkWriter();
 
             writer.Write((int) Type.Tilemap);
             writer.WriteBytesFull(world.tilemap);
+
+            Send(connectionID, writer.AsArray(), 1);
+        }
+
+        {
+            var writer = new NetworkWriter();
+
+            writer.Write((int) Type.Palette);
             
+            for (int i = 0; i < 16; ++i) writer.Write((Color32) world.palette[i]);
 
             Send(connectionID, writer.AsArray(), 1);
         }
@@ -1293,11 +1392,7 @@ public class Test : MonoBehaviour
 
         for (int i = 0; i < maxTiles; ++i)
         {
-            SendTileInChunks(connectionID, world, (byte) i);
-
-            //yield return new WaitForSeconds(0.1f);
+            Send(connectionID, TileInChunksMessages(world, (byte) i));
         }
-
-        yield break;
     }
 }
