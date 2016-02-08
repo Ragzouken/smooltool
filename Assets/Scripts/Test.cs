@@ -65,6 +65,15 @@ public class Test : MonoBehaviour
 
     [SerializeField] private TileEditor tileEditor;
 
+    [Header("Customise")]
+    [SerializeField] private Image avatarEditImage;
+    [SerializeField] private Button avatarEditButton;
+    [SerializeField] private Button avatarResetButton;
+    [SerializeField] private InputField avatarNameInput;
+
+    [SerializeField] private Texture2D defaultAvatar;
+    private Texture2D avatarGraphic;
+
     private MonoBehaviourPooler<byte, TileToggle> tiles;
 
     private NetworkMatch match;
@@ -101,11 +110,63 @@ public class Test : MonoBehaviour
         Application.runInBackground = true;
 
         StartCoroutine(SendMessages());
+
+        avatarGraphic = BlankTexture.New(32, 32, Color.clear);
+        ResetAvatar();
+
+        avatarEditImage.sprite = BlankTexture.FullSprite(avatarGraphic);
+        avatarEditButton.onClick.AddListener(OnClickedEditAvatar);
+        avatarResetButton.onClick.AddListener(ResetAvatar);
+
+        LoadConfig();
     }
 
     private void InitialiseWorld(MatchDesc desc, WorldPanel panel)
     {
         panel.SetMatch(desc);
+    }
+
+    private void ResetAvatar()
+    {
+        avatarGraphic.SetPixels32(defaultAvatar.GetPixels32());
+        avatarGraphic.Apply();
+    }
+
+    private void OnClickedEditAvatar()
+    {
+        var palette = world.palette.ToArray();
+        palette[0] = Color.clear;
+
+        tileEditor.OpenAndEdit(palette,
+                               BlankTexture.FullSprite(avatarGraphic),
+                               SaveConfig,
+                               delegate { });
+    }
+
+    private void SaveConfig()
+    {
+        var root = Application.persistentDataPath;
+
+        System.IO.Directory.CreateDirectory(root + "/settings");
+        System.IO.File.WriteAllBytes(root + "/settings/avatar.png", avatarGraphic.EncodeToPNG());
+    }
+
+    private void LoadConfig()
+    {
+        var root = Application.persistentDataPath;
+
+        System.IO.Directory.CreateDirectory(root + "/settings");
+
+        try
+        {
+            byte[] avatar = System.IO.File.ReadAllBytes(root + "/settings/avatar.png");
+
+            avatarGraphic.LoadImage(avatar);
+        }
+        catch (System.IO.FileNotFoundException)
+        {
+
+        }
     }
 
     private void OnClickedCreate()
@@ -690,7 +751,7 @@ public class Test : MonoBehaviour
 
     private void OpenForEdit(byte tile)
     {
-        tileEditor.OpenAndEdit(world,
+        tileEditor.OpenAndEdit(world.palette,
                                world.tiles[tile],
                                () => SendAll(TileInChunksMessages(world, tile)),
                                () => ReleaseTile(tile));

@@ -19,12 +19,10 @@ public class TileEditor : MonoBehaviour
 
     private Action Save;
     private Action Commit;
-    private World world;
+    private Color[] palette;
 
     private void Awake()
     {
-        gameObject.SetActive(false);
-
         saveButton.onClick.AddListener(OnClickedSave);
 
         for (int i = 0; i < sizeToggles.Length; ++i)
@@ -46,7 +44,7 @@ public class TileEditor : MonoBehaviour
 
             sizeToggle.onValueChanged.AddListener(active =>
             {
-                brushColor = world.palette[index];
+                brushColor = palette[index];
             });
         }
     }
@@ -100,16 +98,19 @@ public class TileEditor : MonoBehaviour
 
             if (drawing)
             {
+                var blend = brushColor.a == 1 ? Blend.Alpha
+                                              : Blend.Subtract;
+
                 using (Brush line = Brush.Line(prevCursor, 
                                                currCursor,
-                                               brushColor,
+                                               brushColor.a == 1 ? brushColor : Color.white,
                                                brushSize))
                 {
                     Brush.Apply(line,
                                 Vector2.zero,
                                 tileImage.sprite,
                                 Point.Zero,
-                                Blend.Alpha);
+                                blend);
                 }
             }
 
@@ -124,22 +125,24 @@ public class TileEditor : MonoBehaviour
         drawing = (drawing || inside) && Input.GetMouseButton(0);
     }
 
-    public void OpenAndEdit(World world,
+    public void OpenAndEdit(Color[] palette,
                             Sprite sprite, 
                             Action save,
                             Action commit)
     {
         gameObject.SetActive(true);
 
-        this.world = world;
+        this.palette = palette;
         tileImage.sprite = sprite;
         Save = save;
         Commit = commit;
 
+        brushColor = palette[1];
+
         for (int i = 0; i < colorToggles.Length; ++i)
         {
             Toggle sizeToggle = colorToggles[i];
-            Color color = world.palette[i];
+            Color color = palette[i];
 
             sizeToggle.GetComponent<Image>().color = color;
         }
