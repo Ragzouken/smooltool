@@ -90,13 +90,16 @@ public class TileEditor : MonoBehaviour
         btrans.localScale = Vector3.one * 7 * 0.01f;
 
         bool inside = Rect.MinMaxRect(0, 0, 32, 32).Contains(cursor);
+        bool picker = Input.GetKey(KeyCode.LeftAlt) || Input.GetKeyDown(KeyCode.RightAlt);
+
+        brushCursor.gameObject.SetActive(inside && !picker);
 
         if (Input.GetMouseButton(0))
         {
             prevCursor = currCursor;
             currCursor = cursor;
 
-            if (drawing)
+            if (drawing && !picker)
             {
                 var blend = brushColor.a == 1 ? Blend.Alpha
                                               : Blend.Subtract;
@@ -112,14 +115,14 @@ public class TileEditor : MonoBehaviour
                                 Point.Zero,
                                 blend);
                 }
-            }
 
-            tileImage.sprite.texture.Apply();
-        }
-        else if (drawing)
-        {
-            Save();
-            lastSaveTime = Time.timeSinceLevelLoad;
+                tileImage.sprite.texture.Apply();
+            }
+            else if (drawing && picker)
+            {
+                brushColor = tileImage.sprite.texture.GetPixel((int) currCursor.x,
+                                                               (int) currCursor.y);
+            }
         }
 
         drawing = (drawing || inside) && Input.GetMouseButton(0);
@@ -150,7 +153,7 @@ public class TileEditor : MonoBehaviour
         StartCoroutine(AutoSave());
     }
 
-    private void OnClickedSave()
+    public void OnClickedSave()
     {
         gameObject.SetActive(false);
 
@@ -162,12 +165,12 @@ public class TileEditor : MonoBehaviour
     {
         while (true)
         {
-            float dt = Time.timeSinceLevelLoad - lastSaveTime;
+            float dt = Time.realtimeSinceStartup - lastSaveTime;
 
-            if (dt > 1)
+            if (dt > 5)
             {
                 Save();
-                lastSaveTime = Time.timeSinceLevelLoad;
+                lastSaveTime = Time.realtimeSinceStartup;
             }
 
             yield return null;

@@ -65,6 +65,7 @@ public class WorldView : MonoBehaviour
         animations[avatar] = 0;
 
         view.transform.position = avatar.destination * 32 + Vector2.one * 16;
+        view.SetAvatar(avatar);
     }
 
     public void SetWorld(World world)

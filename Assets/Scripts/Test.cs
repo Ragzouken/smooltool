@@ -36,6 +36,7 @@ public class Test : MonoBehaviour
     [Header("Host")]
     [SerializeField] private InputField titleInput;
     [SerializeField] private Button createButton;
+    [SerializeField] private InputField hostPasswordInput;
 
     [Header("List")]
     [SerializeField] private Transform worldContainer;
@@ -48,10 +49,15 @@ public class Test : MonoBehaviour
     [Header("Details")]
     [SerializeField] private GameObject detailsDisableObject;
     [SerializeField] private Text worldDescription;
+    [SerializeField] private GameObject passwordObject;
+    [SerializeField] private InputField passwordInput;
     [SerializeField] private Button enterButton;
 
+    [Header("Chat")]
     [SerializeField] private GameObject chatObject;
     [SerializeField] private InputField chatInput;
+    [SerializeField] private RectTransform chatLogContainer;
+    [SerializeField] private ChatLogElement chatLogPrefab;
 
     [SerializeField] private new Camera camera;
     [SerializeField] private Image tileCursor;
@@ -74,7 +80,15 @@ public class Test : MonoBehaviour
     [SerializeField] private Texture2D defaultAvatar;
     private Texture2D avatarGraphic;
 
+    private struct LoggedMessage
+    {
+        public World.Avatar avatar;
+        public string message;
+    }
+
     private MonoBehaviourPooler<byte, TileToggle> tiles;
+    private MonoBehaviourPooler<LoggedMessage, ChatLogElement> chatLog;
+    private List<LoggedMessage> chats = new List<LoggedMessage>();
 
     private NetworkMatch match;
 
@@ -91,7 +105,7 @@ public class Test : MonoBehaviour
         PRE4,
     }
 
-    public static Version version = Version.DEV;
+    public static Version version = Version.PRE4;
 
     private void Awake()
     {
@@ -106,6 +120,10 @@ public class Test : MonoBehaviour
         worlds = new MonoBehaviourPooler<MatchDesc, WorldPanel>(worldPrefab,
                                                                 worldContainer,
                                                                 InitialiseWorld);
+
+        chatLog = new MonoBehaviourPooler<LoggedMessage, ChatLogElement>(chatLogPrefab,
+                                                                         chatLogContainer,
+                                                                         InitialiseChatLog);
 
         Application.runInBackground = true;
 
@@ -124,6 +142,11 @@ public class Test : MonoBehaviour
     private void InitialiseWorld(MatchDesc desc, WorldPanel panel)
     {
         panel.SetMatch(desc);
+    }
+
+    private void InitialiseChatLog(LoggedMessage message, ChatLogElement element)
+    {
+        element.SetMessage(message.avatar, message.message);
     }
 
     private void ResetAvatar()
@@ -163,9 +186,9 @@ public class Test : MonoBehaviour
 
             avatarGraphic.LoadImage(avatar);
         }
-        catch (System.IO.FileNotFoundException)
+        catch (System.Exception exception)
         {
-
+            Debug.LogWarningFormat("Couldn't load an existing #smoolsona:\n{0}", exception);
         }
     }
 
@@ -175,7 +198,7 @@ public class Test : MonoBehaviour
         create.name = titleInput.text;
         create.size = 8;
         create.advertise = true;
-        create.password = "";
+        create.password = hostPasswordInput.text;
 
         create.name += "!" + (int)version;
 
@@ -310,6 +333,9 @@ public class Test : MonoBehaviour
                                                            .Skip(1)
                                                            .Reverse()
                                                            .ToArray());
+
+        passwordObject.SetActive(desc.isPrivate);
+        passwordInput.text = "";
     }
 
     public void DeselectMatch()
@@ -324,7 +350,7 @@ public class Test : MonoBehaviour
         {
             group.interactable = false;
 
-            match.JoinMatch(selected.networkId, "", OnMatchJoined);
+            match.JoinMatch(selected.networkId, passwordInput.text, OnMatchJoined);
         }
     }
 
@@ -351,6 +377,15 @@ public class Test : MonoBehaviour
     }
 
     private int hostID = -1;
+
+    private Sprite DefaultSmoolsona()
+    {
+        var texture = BlankTexture.New(32, 32, Color.clear);
+        texture.SetPixels32(defaultAvatar.GetPixels32());
+        texture.Apply();
+
+        return BlankTexture.FullSprite(texture);
+    }
 
     private void SetupHost(bool hosting)
     {
@@ -388,9 +423,18 @@ public class Test : MonoBehaviour
                 id = 0,
                 destination = Vector2.zero,
                 source = Vector2.zero,
+                graphic = BlankTexture.FullSprite(BlankTexture.New(32, 32, Color.clear)),
             });
 
             worldView.viewer = world.avatars[0];
+
+            colors = avatarGraphic.GetPixels()
+                                  .Select(color => ColorToPalette(color, true))
+                                  .Select(index => index == 0 ? Color.clear : world.palette[index])
+                                  .ToArray();
+
+            worldView.viewer.graphic.texture.SetPixels(colors);
+            worldView.viewer.graphic.texture.Apply();
 
             hostID = NetworkTransport.AddHost(topology, 9001);
         }
@@ -422,6 +466,7 @@ public class Test : MonoBehaviour
         DestroyAvatar,
         MoveAvatar,
         GiveAvatar,
+        AvatarChunk,
 
         Chat,
 
@@ -443,6 +488,7 @@ public class Test : MonoBehaviour
             id = connectionID,
             destination = new Vector2(0, connectionID),
             source = new Vector2(0, connectionID),
+            graphic = BlankTexture.FullSprite(BlankTexture.New(32, 32, Color.clear)),
         };
 
         AddAvatar(avatar);
@@ -587,6 +633,7 @@ public class Test : MonoBehaviour
             id = reader.ReadInt32(),
             destination = reader.ReadVector2(),
             source = reader.ReadVector2(),
+            graphic = BlankTexture.FullSprite(BlankTexture.New(32, 32, Color.clear)),
         };
 
         AddAvatar(avatar);
@@ -622,6 +669,16 @@ public class Test : MonoBehaviour
         int id = reader.ReadInt32();
 
         worldView.viewer = world.avatars.Where(a => a.id == id).First();
+
+        var colors = avatarGraphic.GetPixels()
+                                  .Select(color => ColorToPalette(color, true))
+                                  .Select(index => index == 0 ? Color.clear : world.palette[index])
+                                  .ToArray();
+
+        worldView.viewer.graphic.texture.SetPixels(colors);
+        worldView.viewer.graphic.texture.Apply();
+
+        SendAll(AvatarInChunksMessages(world, worldView.viewer));
     }
 
     private byte[] MoveAvatarMessage(World.Avatar avatar,
@@ -849,7 +906,7 @@ public class Test : MonoBehaviour
                                                   message.data.Length,
                                                   out error))
                     {
-                        Debug.LogFormat("CANT: {0}", (NetworkError)error);
+                        Debug.LogFormat("CANT: {0} ({1} in queue)", (NetworkError)error, sends.Count);
 
                         if ((NetworkError) error == NetworkError.WrongConnection)
                         {
@@ -876,11 +933,40 @@ public class Test : MonoBehaviour
         audio.PlayOneShot(speakSound);
 
         worldView.Chat(avatar, message);
+
+        chats.Add(new LoggedMessage
+        {
+            avatar = avatar,
+            message = message,
+        });
+
+        chatLog.SetActive(chats.Reverse<LoggedMessage>().Take(8).Reverse());
     }
 
     private void Update()
     {
         GameObject selected = UnityEngine.EventSystems.EventSystem.current.currentSelectedGameObject;
+
+        if (Input.GetKeyDown(KeyCode.Escape))
+        {
+            if (tileEditor.gameObject.activeSelf)
+            {
+                tileEditor.OnClickedSave();
+            }
+            else if (chatObject.gameObject.activeSelf)
+            {
+                chatObject.SetActive(false);
+            }
+            else if (hostID != -1)
+            {
+                OnApplicationQuit();
+                SceneManager.LoadScene("test");
+            }
+            else
+            {
+                Application.Quit();
+            }
+        }
 
         if (hostID == -1) return;
 
@@ -1224,6 +1310,10 @@ public class Test : MonoBehaviour
                     {
                         ReceiveLockTile(reader);
                     }
+                    else if (type == Type.AvatarChunk)
+                    {
+                        ReceiveAvatarChunk(reader, connectionID);
+                    }
                 }
             }
         }
@@ -1283,20 +1373,84 @@ public class Test : MonoBehaviour
 
     private float max = 0;
 
-    private byte ColorToPalette(Color color)
+    private byte ColorToPalette(Color color, bool clearzero=false)
     {
-        Color nearest = world.palette.OrderBy(other => ColorDistance(color, other)).First();
+        if (clearzero && color.a == 0) return 0;
+
+        Color nearest = world.palette.Skip(clearzero ? 1 : 0).OrderBy(other => ColorDistance(color, other)).First();
         int index = Mathf.Max(System.Array.IndexOf(world.palette, nearest), 0);
         
         return (byte) index;
     }
 
-    private byte ColorToPaletteFast(Color color)
+    private byte ColorToPaletteFast(Color color, bool clearzero=false)
     {
-        Color nearest = world.palette.FirstOrDefault(other => ColorDistance(color, other) <= 3);
+        if (clearzero && color.a == 0) return 0;
+
+        Color nearest = world.palette.Skip(clearzero ? 1 : 0).FirstOrDefault(other => ColorDistance(color, other) <= 3);
         int index = Mathf.Max(System.Array.IndexOf(world.palette, nearest), 0);
 
         return (byte)index;
+    }
+
+    private byte[][] AvatarInChunksMessages(World world,
+                                            World.Avatar avatar,
+                                            int size = 128)
+    {
+        Color32[] colors = avatar.graphic.texture.GetPixels32();
+        byte[] bytes = colors.Select(c => ColorToPaletteFast(c, true)).ToArray();
+        byte[] chunk;
+
+        int offset = 0;
+
+        var messages = new List<byte[]>();
+
+        while (bytes.Any())
+        {
+            chunk = bytes.Take(size).ToArray();
+            bytes = bytes.Skip(size).ToArray();
+
+            var writer = new NetworkWriter();
+            writer.Write((int) Type.AvatarChunk);
+            writer.Write(avatar.id);
+            writer.Write(offset);
+            writer.WriteBytesFull(CrunchBytes(chunk));
+
+            messages.Add(writer.AsArray());
+
+            offset += size;
+        }
+
+        return messages.ToArray();
+    }
+
+    private void ReceiveAvatarChunk(NetworkReader reader, int connectionID)
+    {
+        int id = reader.ReadInt32();
+
+        World.Avatar avatar = world.avatars.Where(av => av.id == id).First();
+        int offset = reader.ReadInt32();
+        byte[] chunk = UncrunchBytes(reader.ReadBytesAndSize());
+
+        // if we're the host, disallow chunks not send by the owner
+        if (hosting && avatar.id != connectionID) return;
+
+        Color32[] colors = avatar.graphic.texture.GetPixels32();
+
+        for (int i = 0; i < chunk.Length; ++i)
+        {
+            byte index = chunk[i];
+
+            colors[i + offset] = index == 0 ? Color.clear : world.palette[index];
+        }
+
+        avatar.graphic.texture.SetPixels32(colors);
+        avatar.graphic.texture.Apply();
+
+        if (hosting)
+        {
+            SendAll(AvatarInChunksMessages(world, avatar));
+        }
     }
 
     private byte[][] TileInChunksMessages(World world,
@@ -1434,6 +1588,10 @@ public class Test : MonoBehaviour
             if (avatar.id == connectionID)
             {
                 Send(connectionID, GiveAvatarMessage(avatar), 0);
+            }
+            else
+            {
+                Send(connectionID, AvatarInChunksMessages(world, avatar));
             }
         }
 

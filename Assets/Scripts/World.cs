@@ -11,6 +11,7 @@ public class World
     {
         public int id;
         public Vector2 destination, source;
+        public Sprite graphic;
 
         public float u;
     }

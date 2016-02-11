@@ -13,6 +13,11 @@ public class AvatarView : MonoBehaviour
     [SerializeField] private GameObject chatObject;
     [SerializeField] private Text chatText;
 
+    public void SetAvatar(World.Avatar avatar)
+    {
+        image.sprite = avatar.graphic;
+    }
+
     public void SetChat(string message)
     {
         coroutine.StartCoroutine(DisplayChat(message));
