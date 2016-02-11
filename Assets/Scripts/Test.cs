@@ -426,13 +426,7 @@ public class Test : MonoBehaviour
             world.tileset.SetPixels(0, 0, 512, 64, colors);
             world.tileset.Apply();
 
-            AddAvatar(new World.Avatar
-            {
-                id = 0,
-                destination = Vector2.zero,
-                source = Vector2.zero,
-                graphic = BlankTexture.FullSprite(BlankTexture.New(32, 32, Color.clear)),
-            });
+            AddAvatar(NewAvatar(0));
 
             worldView.viewer = world.avatars[0];
 
@@ -484,6 +478,16 @@ public class Test : MonoBehaviour
         LockTile,
     }
 
+    private World.Avatar NewAvatar(int connectionID)
+    {
+        return new World.Avatar
+        {
+            id = connectionID,
+            destination = new Vector2(0, 0),
+            source = new Vector2(0, 0),
+            graphic = BlankTexture.FullSprite(BlankTexture.New(32, 32, Color.clear)),
+        };
+    }
 
     private void OnNewClientConnected(int connectionID)
     {
@@ -491,13 +495,7 @@ public class Test : MonoBehaviour
 
         connectionIDs.Add(connectionID);
 
-        var avatar = new World.Avatar
-        {
-            id = connectionID,
-            destination = new Vector2(0, connectionID),
-            source = new Vector2(0, connectionID),
-            graphic = BlankTexture.FullSprite(BlankTexture.New(32, 32, Color.clear)),
-        };
+        var avatar = NewAvatar(connectionID);
 
         AddAvatar(avatar);
 
@@ -618,7 +616,7 @@ public class Test : MonoBehaviour
         {
             channel = channelID,
             connections = hosting ? clients.Select(client => client.connectionID).Where(id => id != except).ToArray()
-                                  : new int[] { 1 },
+                                  : new [] { 1 },
             data = data,
         });
     }
@@ -1106,15 +1104,9 @@ public class Test : MonoBehaviour
 
                     SendAll(SetWallMessage(tile, wall));
 
-                    audio.PlayOneShot(placeSound);
-
-                    if (wall)
+                    if (this.world.walls.Set(tile, wall))
                     {
-                        this.world.walls.Add(tile);
-                    }
-                    else
-                    {
-                        this.world.walls.Remove(tile);
+                        audio.PlayOneShot(placeSound);
                     }
 
                     worldView.RefreshWalls();
