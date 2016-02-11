@@ -628,9 +628,9 @@ public class Test : MonoBehaviour
 
     private void ReceiveDestroyAvatar(NetworkReader reader)
     {
-        int id = reader.ReadInt32();
+        World.Avatar avatar = ID2Avatar(reader.ReadInt32());
 
-        RemoveAvatar(world.avatars.Where(a => a.id == id).First());
+        RemoveAvatar(avatar);
     }
 
     private byte[] GiveAvatarMessage(World.Avatar avatar)
@@ -644,9 +644,9 @@ public class Test : MonoBehaviour
 
     private void ReceiveGiveAvatar(NetworkReader reader)
     {
-        int id = reader.ReadInt32();
+        World.Avatar avatar = ID2Avatar(reader.ReadInt32());
 
-        worldView.viewer = world.avatars.Where(a => a.id == id).First();
+        worldView.viewer = avatar;
 
         var colors = avatarGraphic.GetPixels()
                                   .Select(color => ColorToPalette(color, true))
@@ -1214,10 +1214,8 @@ public class Test : MonoBehaviour
                     }
                     else if (type == Type.MoveAvatar)
                     {
-                        int id = reader.ReadInt32();
+                        World.Avatar avatar = ID2Avatar(reader.ReadInt32());
                         Vector2 dest = reader.ReadVector2();
-
-                        World.Avatar avatar = world.avatars.Where(a => a.id == id).First();
 
                         if (hosting)
                         {
@@ -1244,10 +1242,8 @@ public class Test : MonoBehaviour
                     }
                     else if (type == Type.Chat)
                     {
-                        int id = reader.ReadInt32();
+                        World.Avatar avatar = ID2Avatar(reader.ReadInt32());
                         string message = reader.ReadString();
-
-                        World.Avatar avatar = world.avatars.Where(a => a.id == id).First();
 
                         if (hosting)
                         {
@@ -1393,9 +1389,7 @@ public class Test : MonoBehaviour
 
     private void ReceiveAvatarChunk(NetworkReader reader, int connectionID)
     {
-        int id = reader.ReadInt32();
-
-        World.Avatar avatar = world.avatars.Where(av => av.id == id).First();
+        World.Avatar avatar = ID2Avatar(reader.ReadInt32());
         int offset = reader.ReadInt32();
         byte[] chunk = UncrunchBytes(reader.ReadBytesAndSize());
 
