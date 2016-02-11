@@ -43,6 +43,7 @@ public class Test : MonoBehaviour
     [SerializeField] private WorldPanel worldPrefab;
     [SerializeField] private GameObject newerVersionDisableObject;
     [SerializeField] private GameObject noWorldsDisableObject;
+    [SerializeField] private GameObject cantConnectDisableObject;
 
     private MonoBehaviourPooler<MatchDesc, WorldPanel> worlds;
 
@@ -70,12 +71,7 @@ public class Test : MonoBehaviour
     [SerializeField] private Button lockButton;
 
     [SerializeField] private TileEditor tileEditor;
-
-    [Header("Customise")]
-    [SerializeField] private Image avatarEditImage;
-    [SerializeField] private Button avatarEditButton;
-    [SerializeField] private Button avatarResetButton;
-    [SerializeField] private InputField avatarNameInput;
+    [SerializeField] private CustomiseTab customiseTab;
 
     [SerializeField] private Texture2D defaultAvatar;
     private Texture2D avatarGraphic;
@@ -132,9 +128,10 @@ public class Test : MonoBehaviour
         avatarGraphic = BlankTexture.New(32, 32, Color.clear);
         ResetAvatar();
 
-        avatarEditImage.sprite = BlankTexture.FullSprite(avatarGraphic);
-        avatarEditButton.onClick.AddListener(OnClickedEditAvatar);
-        avatarResetButton.onClick.AddListener(ResetAvatar);
+        customiseTab.Setup(tileEditor,
+                           BlankTexture.FullSprite(avatarGraphic),
+                           SaveConfig,
+                           ResetAvatar);
 
         LoadConfig();
     }
@@ -302,13 +299,24 @@ public class Test : MonoBehaviour
 
             match.ListMatches(request, matches =>
             {
+                if (!matches.success)
+                {
+                    newerVersionDisableObject.SetActive(false);
+                    noWorldsDisableObject.SetActive(false);
+                    cantConnectDisableObject.SetActive(true);
+                    worlds.Clear();
+
+                    return;
+                }
+
                 var list = matches.matches;
 
                 var valid = list.Where(m => GetVersion(m) == (int)version);
-                var newer = list.Where(m => GetVersion(m) > (int)version);
+                var newer = list.Where(m => GetVersion(m) >  (int)version);
 
                 newerVersionDisableObject.SetActive(newer.Any());
                 noWorldsDisableObject.SetActive(!newer.Any() && !valid.Any());
+                cantConnectDisableObject.SetActive(false);
                 worlds.SetActive(valid);
 
                 if (selected != null

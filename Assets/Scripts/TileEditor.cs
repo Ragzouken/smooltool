@@ -59,9 +59,25 @@ public class TileEditor : MonoBehaviour
     private int brushSize = 3;
 
     private float lastSaveTime;
+    private Color32[] clipboard;
 
     private void Update()
     {
+        bool control = Input.GetKey(KeyCode.LeftControl) 
+                    || Input.GetKey(KeyCode.RightControl);
+
+        if (control && Input.GetKeyDown(KeyCode.C))
+        {
+            clipboard = tileImage.sprite.texture.GetPixels32();
+        }
+        else if (control
+              && Input.GetKeyDown(KeyCode.V)
+              && clipboard != null)
+        {
+            tileImage.sprite.texture.SetPixels32(clipboard);
+            tileImage.sprite.texture.Apply();
+        }
+
         var ttrans = tileImage.transform as RectTransform;
 
         Vector2 cursor;
