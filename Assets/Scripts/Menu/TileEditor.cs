@@ -66,6 +66,9 @@ public class TileEditor : MonoBehaviour
         bool control = Input.GetKey(KeyCode.LeftControl) 
                     || Input.GetKey(KeyCode.RightControl);
 
+        bool shift = Input.GetKey(KeyCode.LeftShift)
+                  || Input.GetKey(KeyCode.RightShift);
+
         if (control && Input.GetKeyDown(KeyCode.C))
         {
             clipboard = tileImage.sprite.texture.GetPixels32();
@@ -107,10 +110,21 @@ public class TileEditor : MonoBehaviour
 
         bool inside = Rect.MinMaxRect(0, 0, 32, 32).Contains(cursor);
         bool picker = Input.GetKey(KeyCode.LeftAlt) || Input.GetKeyDown(KeyCode.RightAlt);
+        bool fill = shift;
 
         brushCursor.gameObject.SetActive(inside && !picker);
 
-        if (Input.GetMouseButton(0))
+        Sprite sprite = tileImage.sprite;
+
+        if (Input.GetMouseButtonDown(0) && fill)
+        {
+            sprite.texture.FloodFillAreaNPO2((int) cursor.x, 
+                                             (int) cursor.y, 
+                                             brushColor, 
+                                             sprite.rect);
+            sprite.texture.Apply();
+        }
+        else if (Input.GetMouseButton(0))
         {
             prevCursor = currCursor;
             currCursor = cursor;
@@ -136,12 +150,17 @@ public class TileEditor : MonoBehaviour
             }
             else if (drawing && picker)
             {
-                brushColor = tileImage.sprite.texture.GetPixel((int) currCursor.x,
-                                                               (int) currCursor.y);
+                int x = (int)(cursor.x + sprite.rect.x);
+                int y = (int)(cursor.y + sprite.rect.y);
+
+                brushColor = sprite.texture.GetPixel(x, y);
             }
         }
 
-        drawing = (drawing || inside) && Input.GetMouseButton(0);
+        drawing = (drawing || inside) 
+               && !fill
+               && !picker
+               && Input.GetMouseButton(0);
     }
 
     public void OpenAndEdit(Color[] palette,

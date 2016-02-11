@@ -35,8 +35,8 @@ public class Test : MonoBehaviour
 
     [Header("Host")]
     [SerializeField] private InputField titleInput;
-    [SerializeField] private Button createButton;
     [SerializeField] private InputField hostPasswordInput;
+    [SerializeField] private Button createButton;
 
     [Header("List")]
     [SerializeField] private Transform worldContainer;
@@ -58,6 +58,7 @@ public class Test : MonoBehaviour
     [SerializeField] private Image tileCursor;
     [SerializeField] private GameObject pickerCursor;
 
+    [Header("UI")]
     [SerializeField] private TileEditor tileEditor;
     [SerializeField] private CustomiseTab customiseTab;
     [SerializeField] private TilePalette tilePalette;
@@ -89,9 +90,10 @@ public class Test : MonoBehaviour
         PRE2,
         PRE3,
         PRE4,
+        PRE5,
     }
 
-    public static Version version = Version.DEV;
+    public static Version version = Version.PRE5;
 
     private void Awake()
     {
@@ -216,7 +218,6 @@ public class Test : MonoBehaviour
     }
 
     public World world;
-    public Texture2D test;
 
     private void Start()
     {
@@ -229,8 +230,6 @@ public class Test : MonoBehaviour
         }
 
         worldView.SetWorld(world);
-
-        test = world.tileset;
 
         StartCoroutine(RefreshList());
 
@@ -1001,7 +1000,7 @@ public class Test : MonoBehaviour
 
             tileCursor.gameObject.SetActive(true);
             pickerCursor.SetActive(picker);
-            tileCursor.sprite = this.world.tiles[paintTile];
+            tileCursor.sprite = this.world.tiles[tilePalette.SelectedTile];
 
             Vector2 mouse = Input.mousePosition;
             Vector3 world;
@@ -1016,7 +1015,7 @@ public class Test : MonoBehaviour
 
             tileCursor.transform.position = new Vector2(x * 32, y * 32);
 
-            byte tile = paintTile;
+            byte tile = tilePalette.SelectedTile;
             int location = (y + 16) * 32 + (x + 16);
 
             if (location > 0
@@ -1047,7 +1046,7 @@ public class Test : MonoBehaviour
                     }
                     else if (picker)
                     {
-                        paintTile = this.world.tilemap[location];
+                        tilePalette.SetSelectedTile(this.world.tilemap[location]);
                     }
                 }
             }
@@ -1078,7 +1077,7 @@ public class Test : MonoBehaviour
                 group.interactable = true;
 
                 popups.Show("Network Error: " + (NetworkError)error,
-                            () => SceneManager.LoadScene("test"));
+                            delegate { });
             }
 
             if (eventType == NetworkEventType.ConnectEvent)
@@ -1248,8 +1247,6 @@ public class Test : MonoBehaviour
         for (int i = 0; i < connectionIDs.Count; ++i)
         {
             NetworkTransport.Disconnect(hostID, connectionIDs[i], out error);
-
-            if (error != 0) Debug.LogError("Failed to send message: " + (NetworkError)error);
         }
 
         NetworkTransport.Shutdown();
