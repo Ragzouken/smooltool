@@ -54,12 +54,6 @@ public class Test : MonoBehaviour
     [SerializeField] private InputField passwordInput;
     [SerializeField] private Button enterButton;
 
-    [Header("Chat")]
-    [SerializeField] private GameObject chatObject;
-    [SerializeField] private InputField chatInput;
-    [SerializeField] private RectTransform chatLogContainer;
-    [SerializeField] private ChatLogElement chatLogPrefab;
-
     [SerializeField] private new Camera camera;
     [SerializeField] private Image tileCursor;
     [SerializeField] private GameObject pickerCursor;
@@ -67,11 +61,12 @@ public class Test : MonoBehaviour
     [SerializeField] private TileEditor tileEditor;
     [SerializeField] private CustomiseTab customiseTab;
     [SerializeField] private TilePalette tilePalette;
+    [SerializeField] private ChatOverlay chatOverlay;
 
     [SerializeField] private Texture2D defaultAvatar;
     private Texture2D avatarGraphic;
 
-    private struct LoggedMessage
+    public struct LoggedMessage
     {
         public World.Avatar avatar;
         public string message;
@@ -96,7 +91,7 @@ public class Test : MonoBehaviour
         PRE4,
     }
 
-    public static Version version = Version.PRE4;
+    public static Version version = Version.DEV;
 
     private void Awake()
     {
@@ -112,16 +107,20 @@ public class Test : MonoBehaviour
                                                                 worldContainer,
                                                                 InitialiseWorld);
 
-        chatLog = new MonoBehaviourPooler<LoggedMessage, ChatLogElement>(chatLogPrefab,
-                                                                         chatLogContainer,
-                                                                         InitialiseChatLog);
-
         Application.runInBackground = true;
 
         StartCoroutine(SendMessages());
 
         avatarGraphic = BlankTexture.New(32, 32, Color.clear);
         ResetAvatar();
+
+        chatOverlay.Setup(chats,
+                          message =>
+                          {
+                              SendAll(ChatMessage(worldView.viewer, message));
+
+                              Chat(worldView.viewer, message);
+                          });
 
         customiseTab.Setup(tileEditor,
                            BlankTexture.FullSprite(avatarGraphic),
@@ -917,22 +916,25 @@ public class Test : MonoBehaviour
             message = message,
         });
 
-        chatLog.SetActive(chats.Reverse<LoggedMessage>().Take(8).Reverse());
+        chatOverlay.Refresh();
     }
 
     private void Update()
     {
-        GameObject selected = UnityEngine.EventSystems.EventSystem.current.currentSelectedGameObject;
+        bool editing = tileEditor.gameObject.activeSelf;
+        bool chatting = chatOverlay.gameObject.activeSelf;
 
+        GameObject selected = UnityEngine.EventSystems.EventSystem.current.currentSelectedGameObject;
+        
         if (Input.GetKeyDown(KeyCode.Escape))
         {
-            if (tileEditor.gameObject.activeSelf)
+            if (chatting)
+            {
+                chatOverlay.Hide();
+            }
+            else if (editing)
             {
                 tileEditor.OnClickedSave();
-            }
-            else if (chatObject.gameObject.activeSelf)
-            {
-                chatObject.SetActive(false);
             }
             else if (hostID != -1)
             {
@@ -947,10 +949,19 @@ public class Test : MonoBehaviour
 
         if (hostID == -1) return;
 
-        bool editing = tileEditor.gameObject.activeSelf;
+        if (Input.GetKeyDown(KeyCode.Return))
+        {
+            if (chatting)
+            {
+                chatOverlay.OnClickedSend();
+            }
+            else
+            {
+                chatOverlay.Show();
+            }
+        }
 
-        if (!chatObject.activeSelf
-         && !editing)
+        if (!chatting && !editing)
         {
             if (Input.GetKey(KeyCode.UpArrow) || Input.GetKey(KeyCode.W))
             {
@@ -970,64 +981,9 @@ public class Test : MonoBehaviour
             }
         }
 
-        if (!editing)
-        {
-            if (Input.GetKeyDown(KeyCode.Return))
-            {
-                if (chatObject.activeSelf)
-                {
-                    string message = chatInput.text;
-
-                    chatObject.SetActive(false);
-                    chatInput.text = "";
-
-                    var unlock = Regex.Match(message, @"(lock|unlock)\s(\d+)");
-
-                    if (unlock.Success)
-                    {
-                        byte tile = byte.Parse(unlock.Groups[2].Value);
-                        bool @lock = unlock.Groups[1].Value == "lock";
-
-                        if (@lock && !locks.ContainsKey(tile))
-                        {
-                            RequestTile(tile);
-                            audio.PlayOneShot(placeSound);
-                        }
-                        else if (!@lock && locks.ContainsKey(tile) && locks[tile] == worldView.viewer)
-                        {
-                            ReleaseTile(tile);
-                            audio.PlayOneShot(placeSound);
-                        }
-                    }
-                    else if (message.Trim().Length > 0)
-                    {
-                        SendAll(ChatMessage(worldView.viewer, message));
-
-                        if (hosting) Chat(worldView.viewer, message);
-                    }
-
-                    UnityEngine.EventSystems.EventSystem.current.SetSelectedGameObject(null);
-                }
-                else
-                {
-                    chatObject.SetActive(true);
-                    chatInput.text = "";
-
-                    chatInput.Select();
-                }
-            }
-            else if (chatObject.activeSelf && selected != chatInput.gameObject)
-            {
-                chatObject.SetActive(false);
-            }
-        }
-        else
-        {
-            chatObject.SetActive(false);
-            UnityEngine.EventSystems.EventSystem.current.SetSelectedGameObject(null);
-        }
-
-        if (!chatObject.activeSelf && !editing && Input.GetKey(KeyCode.Space))
+        if (!chatting 
+         && !editing 
+         && Input.GetKey(KeyCode.Space))
         {
             tilePalette.Show();
         }
