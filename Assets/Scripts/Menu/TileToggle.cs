@@ -23,6 +23,11 @@ public class TileToggle : MonoBehaviour
         this.action = action;
     }
 
+    public void Select()
+    {
+        toggle.isOn = true;
+    }
+
     private void OnToggled(bool on)
     {
         if (on) action();

@@ -64,14 +64,9 @@ public class Test : MonoBehaviour
     [SerializeField] private Image tileCursor;
     [SerializeField] private GameObject pickerCursor;
 
-    [Header("Tile Palette")]
-    [SerializeField] private GameObject paletteObject;
-    [SerializeField] private RectTransform paletteContainer;
-    [SerializeField] private TileToggle tilePrefab;
-    [SerializeField] private Button lockButton;
-
     [SerializeField] private TileEditor tileEditor;
     [SerializeField] private CustomiseTab customiseTab;
+    [SerializeField] private TilePalette tilePalette;
 
     [SerializeField] private Texture2D defaultAvatar;
     private Texture2D avatarGraphic;
@@ -90,7 +85,7 @@ public class Test : MonoBehaviour
 
     private byte paintTile;
 
-    private const byte maxTiles = 32;
+    public const byte maxTiles = 32;
 
     public enum Version
     {
@@ -240,37 +235,14 @@ public class Test : MonoBehaviour
 
         StartCoroutine(RefreshList());
 
-        tiles = new MonoBehaviourPooler<byte, TileToggle>(tilePrefab,
-                                                          paletteContainer,
-                                                          InitialiseTileToggle);
-
-        lockButton.onClick.AddListener(delegate
-        {
-            RequestTile(paintTile);
-
-            RefreshLockButtons();
-        });
-
-        RefreshLockButtons();
+        tilePalette.Setup(world,
+                          locks,
+                          RequestTile);
     }
 
     private void RefreshLockButtons()
     {
-        bool locked = locks.ContainsKey(paintTile);
-
-        lockButton.interactable = !locks.ContainsKey(paintTile);
-    }
-
-    private void SetPaintTile(byte tile)
-    {
-        paintTile = tile;
-
-        RefreshLockButtons();
-    }
-
-    private void InitialiseTileToggle(byte tile, TileToggle toggle)
-    {
-        toggle.SetTile(world.tiles[tile], () => SetPaintTile(tile));
+        tilePalette.Refresh();
     }
 
     private int GetVersion(MatchDesc desc)
@@ -291,7 +263,7 @@ public class Test : MonoBehaviour
 
     private IEnumerator RefreshList()
     {
-        while (true)
+        while (hostID == -1)
         {
             var request = new ListMatchRequest();
             request.nameFilter = "";
@@ -809,7 +781,7 @@ public class Test : MonoBehaviour
 
         SendAll(LockTileMessage(null, tile));
 
-        RefreshLockButtons();
+        tilePalette.Refresh();
     }
 
     private void OpenForEdit(byte tile)
@@ -844,7 +816,7 @@ public class Test : MonoBehaviour
             if (hosting) SendAll(LockTileMessage(null, tile));
         }
 
-        RefreshLockButtons();
+        tilePalette.Refresh();
     }
 
     public World.Avatar ID2Avatar(int id)
@@ -923,8 +895,7 @@ public class Test : MonoBehaviour
                     }
                 }
 
-                Type type = (Type)(new NetworkReader(message.data).ReadInt32());
-
+                //Type type = (Type)(new NetworkReader(message.data).ReadInt32());
                 //Debug.LogFormat("SENT: {0}", type);
             }
             else
@@ -1058,13 +1029,11 @@ public class Test : MonoBehaviour
 
         if (!chatObject.activeSelf && !editing && Input.GetKey(KeyCode.Space))
         {
-            tiles.Clear();
-            tiles.SetActive(Enumerable.Range(0, maxTiles).Select(i => (byte)i));
-            paletteObject.SetActive(true);
+            tilePalette.Show();
         }
         else
         {
-            paletteObject.SetActive(false);
+            tilePalette.Hide();
         }
 
         if (!UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject()
@@ -1370,8 +1339,6 @@ public class Test : MonoBehaviour
              + Mathf.Abs(a.g - b.g)
              + Mathf.Abs(a.b - b.b);
     }
-
-    private float max = 0;
 
     private byte ColorToPalette(Color color, bool clearzero=false)
     {
