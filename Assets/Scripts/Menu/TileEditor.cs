@@ -19,6 +19,7 @@ public class TileEditor : MonoBehaviour
 
     private Action Save;
     private Action Commit;
+    private Action<Vector2, Vector2, Color, int> Stroke;
     private Color[] palette;
 
     private void Awake()
@@ -108,7 +109,9 @@ public class TileEditor : MonoBehaviour
         btrans.anchoredPosition = cursor * 7;
         btrans.localScale = Vector3.one * 7 * 0.01f;
 
-        bool inside = Rect.MinMaxRect(0, 0, 32, 32).Contains(cursor);
+        var bounds = Rect.MinMaxRect(0, 0, 32, 32);
+
+        bool inside = bounds.Contains(cursor);
         bool picker = Input.GetKey(KeyCode.LeftAlt) || Input.GetKeyDown(KeyCode.RightAlt);
         bool fill = shift;
 
@@ -129,10 +132,15 @@ public class TileEditor : MonoBehaviour
             prevCursor = currCursor;
             currCursor = cursor;
 
+            Clamp(ref prevCursor, bounds);
+            Clamp(ref currCursor, bounds);
+
             if (drawing && !picker)
             {
                 var blend = brushColor.a == 1 ? Blend.Alpha
                                               : Blend.Subtract;
+
+                if (Stroke != null) Stroke(prevCursor, currCursor, brushColor, brushSize);
 
                 using (Brush line = Brush.Line(prevCursor, 
                                                currCursor,
@@ -163,10 +171,17 @@ public class TileEditor : MonoBehaviour
                && Input.GetMouseButton(0);
     }
 
+    private void Clamp(ref Vector2 coord, Rect bounds)
+    {
+        coord.x = Mathf.Clamp(coord.x, bounds.xMin, bounds.xMax);
+        coord.y = Mathf.Clamp(coord.y, bounds.yMin, bounds.yMax);
+    }
+
     public void OpenAndEdit(Color[] palette,
                             Sprite sprite, 
                             Action save,
-                            Action commit)
+                            Action commit,
+                            Action<Vector2, Vector2, Color, int> stroke=null)
     {
         gameObject.SetActive(true);
 
@@ -174,6 +189,8 @@ public class TileEditor : MonoBehaviour
         tileImage.sprite = sprite;
         Save = save;
         Commit = commit;
+
+        Stroke = stroke;
 
         brushColor = palette[1];
 
@@ -184,8 +201,6 @@ public class TileEditor : MonoBehaviour
 
             sizeToggle.GetComponent<Image>().color = color;
         }
-
-        StartCoroutine(AutoSave());
     }
 
     public void OnClickedSave()
@@ -194,21 +209,5 @@ public class TileEditor : MonoBehaviour
 
         Save();
         Commit();
-    }
-
-    private IEnumerator AutoSave()
-    {
-        while (true)
-        {
-            float dt = Time.realtimeSinceStartup - lastSaveTime;
-
-            if (dt > 5)
-            {
-                Save();
-                lastSaveTime = Time.realtimeSinceStartup;
-            }
-
-            yield return null;
-        }
     }
 }

@@ -12,6 +12,7 @@ using UnityEngine.Networking.Match;
 using UnityEngine.SceneManagement;
 
 using System.Text.RegularExpressions;
+using PixelDraw;
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -93,7 +94,7 @@ public class Test : MonoBehaviour
         PRE5,
     }
 
-    public static Version version = Version.PRE5;
+    public static Version version = Version.DEV;
 
     private void Awake()
     {
@@ -433,6 +434,7 @@ public class Test : MonoBehaviour
 
         TileImage,
         TileChunk,
+        TileStroke,
 
         ReplicateAvatar,
         DestroyAvatar,
@@ -782,12 +784,130 @@ public class Test : MonoBehaviour
         tilePalette.Refresh();
     }
 
+    private void PackBits(NetworkWriter writer,
+                          params uint[] values)
+    {
+        int offset = 0;
+        uint final = 0;
+
+        for (int i = 0; i < values.Length; i += 2)
+        {
+            uint length = values[i + 0];
+            uint value  = values[i + 1];
+
+            final |= (value << offset);
+
+            offset += (int) length;
+        }
+
+        writer.Write(final);
+    }
+    
+    private uint[] UnpackBits(NetworkReader reader,
+                              params uint[] lengths)
+    {
+        int offset = 0;
+        uint final = reader.ReadUInt32();
+
+        uint[] values = new uint[lengths.Length];
+
+        for (int i = 0; i < lengths.Length; ++i)
+        {
+            int length = (int) lengths[i];
+            uint mask = ((uint) 1 << length) - 1;
+
+            values[i] = (final & (mask << offset)) >> offset;
+
+            offset += length;
+        }
+
+        return values;
+    }
+    
+    // line only
+    private byte[] StrokeMessage(byte tile,
+                                 Color color,
+                                 int size,
+                                 Vector2 start,
+                                 Vector2 end)
+    {
+        var writer = new NetworkWriter();
+
+        uint sx = (uint) Mathf.FloorToInt(start.x);
+        uint sy = (uint) Mathf.FloorToInt(start.y);
+        uint ex = (uint) Mathf.FloorToInt(end.x);
+        uint ey = (uint) Mathf.FloorToInt(end.y);
+
+        byte index = ColorToPaletteFast(color);
+
+        writer.Write((int) Type.TileStroke);
+        writer.Write(tile);
+        PackBits(writer,
+                 5, sx,
+                 5, sy,
+                 5, ex,
+                 5, ey,
+                 4, index,
+                 4, (uint) size);
+
+        /*
+        Debug.LogFormat("line from {0}, {1} to {2}, {3} of color {4} and size {5}",
+                        sx, sy, ex, ey, index, size);
+        */
+
+        return writer.ToArray();
+    }
+
+    private void ReceiveTileStroke(NetworkReader reader,
+                                   int connectionID)
+    {
+        byte tile = reader.ReadByte();
+        uint[] values = UnpackBits(reader, 5, 5, 5, 5, 4, 4);
+
+        /*
+        Debug.LogFormat("line from {0}, {1} to {2}, {3} of color {4} and size {5}",
+                        values[0],
+                        values[1],
+                        values[2],
+                        values[3],
+                        values[4],
+                        values[5]);
+        */
+
+        Vector2 start = new Vector2(values[0], values[1]);
+        Vector2 end = new Vector2(values[2], values[3]);
+        Color color = world.palette[values[4]];
+        int thickness = (int)values[5];
+
+        if (hosting)
+        {
+            if (!locks.ContainsKey(tile) || locks[tile].id != connectionID) return;
+
+            SendAll(StrokeMessage(tile, color, thickness, start, end), connectionID);
+        }
+
+        SpriteDrawing sprite = world.tiles[tile];
+
+        sprite.DrawLine(start, end, thickness, color, Blend.Alpha);
+        sprite.Sprite.texture.Apply();
+    }
+
+    public void SendStroke(byte tile,
+                            Vector2 start,
+                            Vector2 end,
+                            Color color,
+                            int size)
+    {
+        SendAll(StrokeMessage(tile, color, size, start, end));
+    }
+
     private void OpenForEdit(byte tile)
     {
         tileEditor.OpenAndEdit(world.palette,
                                world.tiles[tile],
                                () => SendAll(TileInChunksMessages(world, tile)),
-                               () => ReleaseTile(tile));
+                               () => ReleaseTile(tile),
+                               (start, end, color, size) => SendStroke(tile, start, end, color, size));
     }
 
     private void ReceiveLockTile(NetworkReader reader)
@@ -830,8 +950,7 @@ public class Test : MonoBehaviour
         int location = (int)((destination.y + 16) * 32 + (destination.x + 16));
         byte tile = (location >= 0 && location < 1024) ? world.tilemap[location] : (byte)0;
 
-        return world.avatars.Any(a => a.destination == destination)
-            || (avatar.destination - destination).magnitude > 1
+        return (avatar.destination - destination).magnitude > 1
             || !Rect.MinMaxRect(-16, -16, 16, 16).Contains(destination)
             || world.walls.Contains(tile);
     }
@@ -923,8 +1042,6 @@ public class Test : MonoBehaviour
         bool editing = tileEditor.gameObject.activeSelf;
         bool chatting = chatOverlay.gameObject.activeSelf;
 
-        GameObject selected = UnityEngine.EventSystems.EventSystem.current.currentSelectedGameObject;
-        
         if (Input.GetKeyDown(KeyCode.Escape))
         {
             if (chatting)
@@ -1018,7 +1135,7 @@ public class Test : MonoBehaviour
             byte tile = tilePalette.SelectedTile;
             int location = (y + 16) * 32 + (x + 16);
 
-            if (location > 0
+            if (location >= 0
              && location < 1024)
             {
                 if (waller && Input.GetMouseButtonDown(0))
@@ -1233,6 +1350,10 @@ public class Test : MonoBehaviour
                     else if (type == Type.AvatarChunk)
                     {
                         ReceiveAvatarChunk(reader, connectionID);
+                    }
+                    else if (type == Type.TileStroke)
+                    {
+                        ReceiveTileStroke(reader, connectionID);
                     }
                 }
             }

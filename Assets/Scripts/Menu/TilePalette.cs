@@ -66,6 +66,8 @@ public class TilePalette : MonoBehaviour
 
     public void Refresh()
     {
+        if (tiles == null) return;
+
         tiles.Get(SelectedTile).Select();
 
         lockButton.interactable = !locks.ContainsKey(SelectedTile);
