@@ -138,11 +138,6 @@ public class Test : MonoBehaviour
         panel.SetMatch(desc);
     }
 
-    private void InitialiseChatLog(LoggedMessage message, ChatLogElement element)
-    {
-        element.SetMessage(message.avatar, message.message);
-    }
-
     private void ResetAvatar()
     {
         avatarGraphic.SetPixels32(defaultAvatar.GetPixels32());
@@ -409,7 +404,7 @@ public class Test : MonoBehaviour
             worldView.viewer.graphic.texture.SetPixels(colors);
             worldView.viewer.graphic.texture.Apply();
 
-            hostID = NetworkTransport.AddHost(topology, 9001);
+            hostID = NetworkTransport.AddHost(topology, 9002);
         }
         else
         {
