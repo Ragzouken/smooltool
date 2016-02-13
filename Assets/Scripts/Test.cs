@@ -92,6 +92,7 @@ public class Test : MonoBehaviour
         PRE3,
         PRE4,
         PRE5,
+        PRE6,
     }
 
     public static Version version = Version.DEV;
@@ -878,7 +879,7 @@ public class Test : MonoBehaviour
         {
             if (!locks.ContainsKey(tile) || locks[tile].id != connectionID) return;
 
-            SendAll(StrokeMessage(tile, color, thickness, start, end), connectionID);
+            SendAll(StrokeMessage(tile, color, thickness, start, end), except: connectionID);
         }
 
         SpriteDrawing sprite = world.tiles[tile];
@@ -1321,7 +1322,7 @@ public class Test : MonoBehaviour
                         {
                             if (connectionID == avatar.id)
                             {
-                                SendAll(ChatMessage(avatar, message));
+                                SendAll(ChatMessage(avatar, message), except: connectionID);
 
                                 Chat(avatar, message);
                             }

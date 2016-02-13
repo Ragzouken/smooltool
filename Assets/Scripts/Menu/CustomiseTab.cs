@@ -7,6 +7,7 @@ using System.Collections.Generic;
 
 public class CustomiseTab : MonoBehaviour 
 {
+    [SerializeField] private InputField nameInput;
     [SerializeField] private Button editAvatarButton;
     [SerializeField] private Button resetAvatarButton;
     [SerializeField] private Image avatarImage;
@@ -31,6 +32,7 @@ public class CustomiseTab : MonoBehaviour
 
     private void Awake()
     {
+        nameInput.onEndEdit.AddListener(OnNameChanged);
         editAvatarButton.onClick.AddListener(OnClickedEditAvatar);
         resetAvatarButton.onClick.AddListener(OnClickedResetAvatar);
     }
@@ -44,6 +46,18 @@ public class CustomiseTab : MonoBehaviour
                                                         Random.value,
                                                         1)))
                .ToArray();
+    }
+
+    private void OnDisable()
+    {
+        OnNameChanged(nameInput.text);
+    }
+
+    private void OnNameChanged(string name)
+    {
+        avatar.name = name;
+
+        save();
     }
 
     private void OnClickedEditAvatar()
