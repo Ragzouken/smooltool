@@ -1246,6 +1246,8 @@ public class Test : MonoBehaviour
                         {
                             world.walls.Add(wall);
                         }
+
+                        worldView.RefreshWalls();
                     }
                     else if (type == Type.Tileset)
                     {
