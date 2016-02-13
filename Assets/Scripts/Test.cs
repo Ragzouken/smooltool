@@ -461,6 +461,7 @@ public class Test : MonoBehaviour
         DestroyAvatar,
         MoveAvatar,
         GiveAvatar,
+        NameAvatar,
         AvatarChunk,
 
         Chat,
@@ -498,7 +499,7 @@ public class Test : MonoBehaviour
             avatar = avatar,
         });
 
-        SendWorld(connectionID, world);
+        StartCoroutine(SendWorld(connectionID, world));
     }
 
     private void OnConnectedToHost(int connectionID)

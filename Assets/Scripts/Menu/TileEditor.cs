@@ -109,7 +109,7 @@ public class TileEditor : MonoBehaviour
         btrans.anchoredPosition = cursor * 7;
         btrans.localScale = Vector3.one * 7 * 0.01f;
 
-        var bounds = Rect.MinMaxRect(0, 0, 32, 32);
+        var bounds = Rect.MinMaxRect(0, 0, 31, 31);
 
         bool inside = bounds.Contains(cursor);
         bool picker = Input.GetKey(KeyCode.LeftAlt) || Input.GetKeyDown(KeyCode.RightAlt);
