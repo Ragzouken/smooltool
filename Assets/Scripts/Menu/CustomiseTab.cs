@@ -48,6 +48,11 @@ public class CustomiseTab : MonoBehaviour
                .ToArray();
     }
 
+    private void OnEnable()
+    {
+        nameInput.text = avatar.texture.name;
+    }
+
     private void OnDisable()
     {
         OnNameChanged(nameInput.text);
@@ -55,7 +60,7 @@ public class CustomiseTab : MonoBehaviour
 
     private void OnNameChanged(string name)
     {
-        avatar.name = name;
+        avatar.texture.name = name;
 
         save();
     }

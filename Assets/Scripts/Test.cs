@@ -11,8 +11,8 @@ using UnityEngine.Networking.Match;
 
 using UnityEngine.SceneManagement;
 
-using System.Text.RegularExpressions;
 using PixelDraw;
+using Newtonsoft.Json;
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -20,6 +20,12 @@ using UnityEditor;
 
 public class Test : MonoBehaviour
 {
+    [JsonObject(IsReference = false)]
+    private class Config
+    {
+        public string name;
+    }
+
     [SerializeField] private Font[] fonts;
 
     [SerializeField] private new AudioSource audio;
@@ -162,6 +168,12 @@ public class Test : MonoBehaviour
 
         System.IO.Directory.CreateDirectory(root + "/settings");
         System.IO.File.WriteAllBytes(root + "/settings/avatar.png", avatarGraphic.EncodeToPNG());
+
+        System.IO.File.WriteAllText(root + "/settings/config.json",
+                                    JsonWrapper.Serialise(new Config
+                                    {
+                                        name = avatarGraphic.name,
+                                    }));
     }
 
     private void LoadConfig()
@@ -179,6 +191,19 @@ public class Test : MonoBehaviour
         catch (System.Exception exception)
         {
             Debug.LogWarningFormat("Couldn't load an existing #smoolsona:\n{0}", exception);
+        }
+
+        try
+        {
+            string data = System.IO.File.ReadAllText(root + "/settings/config.json");
+
+            var config = JsonWrapper.Deserialise<Config>(data);
+
+            avatarGraphic.name = config.name;
+        }
+        catch (System.Exception exception)
+        {
+            Debug.LogWarningFormat("Couldn't load an existing config:\n{0}", exception);
         }
     }
 
@@ -1372,6 +1397,8 @@ public class Test : MonoBehaviour
         }
 
         NetworkTransport.Shutdown();
+
+        SaveConfig();
     }
 
     void StartServer(CreateMatchResponse response)
