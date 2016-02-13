@@ -147,4 +147,9 @@ public class MonoBehaviourPooler<TShortcut, TInstance>
     {
         Clear();
     }
+
+    public bool IsActive(TShortcut shortcut)
+    {
+        return instances.ContainsKey(shortcut);
+    }
 }

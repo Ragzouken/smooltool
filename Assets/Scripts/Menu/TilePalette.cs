@@ -7,17 +7,26 @@ using System.Collections.Generic;
 
 public class TilePalette : MonoBehaviour 
 {
+    [Header("Pages")]
+    [SerializeField] private RectTransform pageContainer;
+    [SerializeField] private Toggle pagePrefab;
+
+    [Header("Tiles")]
     [SerializeField] private RectTransform tileContainer;
     [SerializeField] private TileToggle tilePrefab;
+
+    [Header("Edit")]
     [SerializeField] private Button lockButton;
 
     public byte SelectedTile { get; private set; }
 
+    private MonoBehaviourPooler<int, Toggle> pages;
     private MonoBehaviourPooler<byte, TileToggle> tiles;
 
     private World world;
     private Dictionary<byte, World.Avatar> locks;
     private System.Action<byte> request;
+    private int page;
 
     public void Setup(World world,
                       Dictionary<byte, World.Avatar> locks,
@@ -35,6 +44,13 @@ public class TilePalette : MonoBehaviour
         tiles = new MonoBehaviourPooler<byte, TileToggle>(tilePrefab,
                                                           tileContainer,
                                                           InitialiseTile);
+
+        pages = new MonoBehaviourPooler<int, Toggle>(pagePrefab,
+                                                     pageContainer,
+                                                     InitialisePage);
+
+        pages.SetActive(Enumerable.Range(0, 8));
+        pages.Get(0).isOn = true;
     }
 
     private void InitialiseTile(byte tile, TileToggle toggle)
@@ -42,19 +58,28 @@ public class TilePalette : MonoBehaviour
         toggle.SetTile(world.tiles[tile], () => SetSelectedTile(tile));
     }
 
+    private void InitialisePage(int page, Toggle toggle)
+    {
+        toggle.onValueChanged.RemoveAllListeners();
+        toggle.onValueChanged.AddListener(active =>
+        {
+            if (active) SetPage(page);
+        });
+    }
+
     public void SetSelectedTile(byte tile)
     {
-        SelectedTile = tile;
+        if (SelectedTile != tile)
+        {
+            SelectedTile = tile;
 
-        Refresh();
+            Refresh();
+        }
     }
 
     public void Show()
     {
         gameObject.SetActive(true);
-
-        tiles.Clear();
-        tiles.SetActive(Enumerable.Range(0, Test.maxTiles).Select(i => (byte) i));
 
         Refresh();
     }
@@ -64,11 +89,20 @@ public class TilePalette : MonoBehaviour
         gameObject.SetActive(false);
     }
 
+    public void SetPage(int page)
+    {
+        this.page = page;
+
+        Refresh();
+    }
+
     public void Refresh()
     {
         if (tiles == null) return;
 
-        tiles.Get(SelectedTile).Select();
+        tiles.SetActive(Enumerable.Range(page * 32, 32).Select(i => (byte)i));
+
+        if (tiles.IsActive(SelectedTile)) tiles.Get(SelectedTile).Select();
 
         lockButton.interactable = !locks.ContainsKey(SelectedTile);
     }

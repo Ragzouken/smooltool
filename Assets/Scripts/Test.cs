@@ -82,7 +82,7 @@ public class Test : MonoBehaviour
 
     private byte paintTile;
 
-    public const byte maxTiles = 32;
+    public const int maxTiles = 256;
 
     public enum Version
     {
@@ -1096,7 +1096,10 @@ public class Test : MonoBehaviour
          && !editing 
          && Input.GetKey(KeyCode.Space))
         {
-            tilePalette.Show();
+            if (!tilePalette.gameObject.activeSelf)
+            {
+                tilePalette.Show();
+            }
         }
         else
         {
@@ -1583,7 +1586,7 @@ public class Test : MonoBehaviour
         }
     }
 
-    private void SendWorld(int connectionID, World world)
+    private IEnumerator SendWorld(int connectionID, World world)
     {
         {
             var writer = new NetworkWriter();
@@ -1629,6 +1632,8 @@ public class Test : MonoBehaviour
 
         for (int i = 0; i < maxTiles; ++i)
         {
+            yield return new WaitForSeconds(0.125f);
+
             Send(connectionID, TileInChunksMessages(world, (byte) i));
         }
     }

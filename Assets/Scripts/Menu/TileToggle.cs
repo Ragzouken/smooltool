@@ -25,6 +25,7 @@ public class TileToggle : MonoBehaviour
 
     public void Select()
     {
+        toggle.group.SetAllTogglesOff();
         toggle.isOn = true;
     }
 
