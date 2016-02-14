@@ -32,9 +32,17 @@ public class World
 
     public World()
     {
+        Color32[] colors = new Color32[512 * 512];
+
         tileset = new Texture2D(512, 512);
         tileset.filterMode = FilterMode.Point;
-        tileset.SetPixels32(Enumerable.Range(0, 512 * 512).Select(i => colors[Random.Range(0, 2)]).ToArray());
+
+        for (int i = 0; i < colors.Length; ++i)
+        {
+            colors[i] = colors[Random.Range(0, 2)];
+        }
+
+        tileset.SetPixels32(colors);
         tileset.Apply();
 
         tiles = new Sprite[256];

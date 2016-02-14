@@ -14,6 +14,7 @@ public class TilePalette : MonoBehaviour
     [Header("Tiles")]
     [SerializeField] private RectTransform tileContainer;
     [SerializeField] private TileToggle tilePrefab;
+    [SerializeField] private ToggleGroup tileGroup;
 
     [Header("Edit")]
     [SerializeField] private Button lockButton;
@@ -55,7 +56,8 @@ public class TilePalette : MonoBehaviour
 
     private void InitialiseTile(byte tile, TileToggle toggle)
     {
-        toggle.SetTile(world.tiles[tile], () => SetSelectedTile(tile));
+        toggle.SetTile(world.tiles[tile], 
+                       () => SetSelectedTile(tile));
     }
 
     private void InitialisePage(int page, Toggle toggle)
@@ -102,7 +104,8 @@ public class TilePalette : MonoBehaviour
 
         tiles.SetActive(Enumerable.Range(page * 32, 32).Select(i => (byte)i));
 
-        if (tiles.IsActive(SelectedTile)) tiles.Get(SelectedTile).Select();
+        tileGroup.SetAllTogglesOff();
+        tiles.DoIfActive(SelectedTile, toggle => toggle.Select());
 
         lockButton.interactable = !locks.ContainsKey(SelectedTile);
     }

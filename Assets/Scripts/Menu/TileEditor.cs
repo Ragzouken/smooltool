@@ -109,7 +109,7 @@ public class TileEditor : MonoBehaviour
         btrans.anchoredPosition = cursor * 7;
         btrans.localScale = Vector3.one * 7 * 0.01f;
 
-        var bounds = Rect.MinMaxRect(0, 0, 31, 31);
+        var bounds = Rect.MinMaxRect(0, 0, 32, 32);
 
         bool inside = bounds.Contains(cursor);
         bool picker = Input.GetKey(KeyCode.LeftAlt) || Input.GetKeyDown(KeyCode.RightAlt);
@@ -118,6 +118,11 @@ public class TileEditor : MonoBehaviour
         brushCursor.gameObject.SetActive(inside && !picker);
 
         Sprite sprite = tileImage.sprite;
+
+        if (!inside)
+        {
+            Debug.Log(cursor);
+        }
 
         if (Input.GetMouseButtonDown(0) && fill)
         {
@@ -173,8 +178,8 @@ public class TileEditor : MonoBehaviour
 
     private void Clamp(ref Vector2 coord, Rect bounds)
     {
-        coord.x = Mathf.Clamp(coord.x, bounds.xMin, bounds.xMax);
-        coord.y = Mathf.Clamp(coord.y, bounds.yMin, bounds.yMax);
+        coord.x = Mathf.Clamp(coord.x, bounds.xMin, bounds.xMax - 1);
+        coord.y = Mathf.Clamp(coord.y, bounds.yMin, bounds.yMax - 1);
     }
 
     public void OpenAndEdit(Color[] palette,

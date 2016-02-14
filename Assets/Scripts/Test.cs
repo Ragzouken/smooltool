@@ -101,7 +101,7 @@ public class Test : MonoBehaviour
         PRE6,
     }
 
-    public static Version version = Version.DEV;
+    public static Version version = Version.PRE6;
 
     private void Awake()
     {
@@ -410,12 +410,12 @@ public class Test : MonoBehaviour
                 pal2col[(byte)i] = world.palette[i];
             }
 
-            var colors = testtex.GetPixels(0, 0, 512, 64)
+            var colors = testtex.GetPixels()
                                 .Select(color => ColorToPalette(color))
                                 .Select(index => world.palette[index])
                                 .ToArray();
 
-            world.tileset.SetPixels(0, 0, 512, 64, colors);
+            world.tileset.SetPixels(colors);
             world.tileset.Apply();
 
             AddAvatar(NewAvatar(0));

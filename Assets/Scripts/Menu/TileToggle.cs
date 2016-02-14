@@ -17,7 +17,8 @@ public class TileToggle : MonoBehaviour
         toggle.onValueChanged.AddListener(OnToggled);
     }
 
-    public void SetTile(Sprite sprite, System.Action action)
+    public void SetTile(Sprite sprite, 
+                        System.Action action)
     {
         image.sprite = sprite;
         this.action = action;

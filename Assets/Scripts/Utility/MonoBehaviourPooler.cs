@@ -152,4 +152,21 @@ public class MonoBehaviourPooler<TShortcut, TInstance>
     {
         return instances.ContainsKey(shortcut);
     }
+
+    public bool DoIfActive(TShortcut shortcut, 
+                           System.Action<TInstance> action)
+    {
+        TInstance instance;
+
+        if (instances.TryGetValue(shortcut, out instance))
+        {
+            action(instance);
+
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
 }
