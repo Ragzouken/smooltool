@@ -43,7 +43,15 @@ public class World
 
         for (int i = 0; i < 16; ++i)
         {
-            palette[i] = new Color(Random.value, Random.value, Random.value, 1);
+            Color color;
+
+            do
+            {
+                color = new Color(Random.value, Random.value, Random.value, 1);
+            }
+            while (palette.Take(i).Any(other => Test.ColorDistance(other, color) < 16f));
+
+            palette[i] = color;
         }
 
         for (int i = 0; i < 256; ++i)

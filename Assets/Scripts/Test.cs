@@ -1432,7 +1432,7 @@ public class Test : MonoBehaviour
                                               out error);
     }
 
-    private int ColorDistance(Color32 a, Color32 b)
+    public static int ColorDistance(Color32 a, Color32 b)
     {
         return Mathf.Abs(a.r - b.r)
              + Mathf.Abs(a.g - b.g)

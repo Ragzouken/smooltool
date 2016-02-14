@@ -12,10 +12,12 @@ public class AvatarView : MonoBehaviour
 
     [SerializeField] private GameObject chatObject;
     [SerializeField] private Text chatText;
+    [SerializeField] private PixelBorder.BorderRenderer border;
 
     public void SetAvatar(World.Avatar avatar)
     {
         image.sprite = avatar.graphic;
+        border.sourceSprite = avatar.graphic;
     }
 
     public void SetChat(string message)
