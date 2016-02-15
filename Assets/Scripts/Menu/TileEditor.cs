@@ -60,7 +60,7 @@ public class TileEditor : MonoBehaviour
     private int brushSize = 3;
 
     private float lastSaveTime;
-    private Color32[] clipboard;
+    private Color[] clipboard;
 
     private void Update()
     {
@@ -70,15 +70,24 @@ public class TileEditor : MonoBehaviour
         bool shift = Input.GetKey(KeyCode.LeftShift)
                   || Input.GetKey(KeyCode.RightShift);
 
+        Rect rect = tileImage.sprite.textureRect;
+
         if (control && Input.GetKeyDown(KeyCode.C))
         {
-            clipboard = tileImage.sprite.texture.GetPixels32();
+            clipboard = tileImage.sprite.texture.GetPixels((int) rect.x,
+                                                           (int) rect.y,
+                                                           (int) rect.width,
+                                                           (int) rect.height);
         }
         else if (control
               && Input.GetKeyDown(KeyCode.V)
               && clipboard != null)
         {
-            tileImage.sprite.texture.SetPixels32(clipboard);
+            tileImage.sprite.texture.SetPixels((int) rect.x, 
+                                               (int) rect.y, 
+                                               (int) rect.width, 
+                                               (int) rect.height, 
+                                               clipboard);
             tileImage.sprite.texture.Apply();
         }
 
@@ -119,13 +128,10 @@ public class TileEditor : MonoBehaviour
 
         Sprite sprite = tileImage.sprite;
 
-        if (!inside)
-        {
-            Debug.Log(cursor);
-        }
-
         if (Input.GetMouseButtonDown(0) && fill)
         {
+            Stroke(cursor, cursor, brushColor, 0);
+
             sprite.texture.FloodFillAreaNPO2((int) cursor.x, 
                                              (int) cursor.y, 
                                              brushColor, 
@@ -140,7 +146,7 @@ public class TileEditor : MonoBehaviour
             Clamp(ref prevCursor, bounds);
             Clamp(ref currCursor, bounds);
 
-            if (drawing && !picker)
+            if (drawing)
             {
                 var blend = brushColor.a == 1 ? Blend.Alpha
                                               : Blend.Subtract;
@@ -161,10 +167,10 @@ public class TileEditor : MonoBehaviour
 
                 tileImage.sprite.texture.Apply();
             }
-            else if (drawing && picker)
+            else if (picker)
             {
-                int x = (int)(cursor.x + sprite.rect.x);
-                int y = (int)(cursor.y + sprite.rect.y);
+                int x = (int)(cursor.x + rect.x);
+                int y = (int)(cursor.y + rect.y);
 
                 brushColor = sprite.texture.GetPixel(x, y);
             }

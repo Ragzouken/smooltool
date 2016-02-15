@@ -618,7 +618,7 @@ public class Test : MonoBehaviour
     private byte[] ReplicateAvatarMessage(World.Avatar avatar)
     {
         var writer = new NetworkWriter();
-        writer.Write((int)Type.ReplicateAvatar);
+        writer.Write((byte) Type.ReplicateAvatar);
         writer.Write(avatar.id);
         writer.Write(avatar.destination);
         writer.Write(avatar.source);
@@ -642,7 +642,7 @@ public class Test : MonoBehaviour
     private byte[] DestroyAvatarMessage(World.Avatar avatar)
     {
         var writer = new NetworkWriter();
-        writer.Write((int)Type.DestroyAvatar);
+        writer.Write((byte) Type.DestroyAvatar);
         writer.Write(avatar.id);
 
         return writer.AsArray();
@@ -658,7 +658,7 @@ public class Test : MonoBehaviour
     private byte[] GiveAvatarMessage(World.Avatar avatar)
     {
         var writer = new NetworkWriter();
-        writer.Write((int)Type.GiveAvatar);
+        writer.Write((byte) Type.GiveAvatar);
         writer.Write(avatar.id);
 
         return writer.AsArray();
@@ -685,7 +685,7 @@ public class Test : MonoBehaviour
                                      Vector2 destination)
     {
         var writer = new NetworkWriter();
-        writer.Write((int)Type.MoveAvatar);
+        writer.Write((byte) Type.MoveAvatar);
         writer.Write(avatar.id);
         writer.Write(destination);
 
@@ -695,7 +695,7 @@ public class Test : MonoBehaviour
     private byte[] ChatMessage(World.Avatar avatar, string message)
     {
         var writer = new NetworkWriter();
-        writer.Write((int)Type.Chat);
+        writer.Write((byte) Type.Chat);
         writer.Write(avatar.id);
         writer.Write(message);
 
@@ -723,7 +723,7 @@ public class Test : MonoBehaviour
                                   byte tile)
     {
         var writer = new NetworkWriter();
-        writer.Write((int)Type.SetTile);
+        writer.Write((byte) Type.SetTile);
         writer.Write(location);
         writer.Write(tile);
 
@@ -760,7 +760,7 @@ public class Test : MonoBehaviour
     private byte[] SetWallMessage(byte tile, bool wall)
     {
         var writer = new NetworkWriter();
-        writer.Write((int)Type.SetWall);
+        writer.Write((byte) Type.SetWall);
         writer.Write(tile);
         writer.Write(wall);
 
@@ -770,7 +770,7 @@ public class Test : MonoBehaviour
     private byte[] LockTileMessage(World.Avatar avatar, byte tile)
     {
         var writer = new NetworkWriter();
-        writer.Write((int)Type.LockTile);
+        writer.Write((byte) Type.LockTile);
         writer.Write(avatar != null ? avatar.id : -1);
         writer.Write(tile);
 
@@ -862,7 +862,7 @@ public class Test : MonoBehaviour
 
         byte index = ColorToPaletteFast(color);
 
-        writer.Write((int) Type.TileStroke);
+        writer.Write((byte) Type.TileStroke);
         writer.Write(tile);
         PackBits(writer,
                  5, sx,
@@ -910,7 +910,15 @@ public class Test : MonoBehaviour
 
         SpriteDrawing sprite = world.tiles[tile];
 
-        sprite.DrawLine(start, end, thickness, color, Blend.Alpha);
+        if (thickness > 0)
+        {
+            sprite.DrawLine(start, end, thickness, color, Blend.Alpha);
+        }
+        else
+        {
+            sprite.Fill(start, color);
+        }
+
         sprite.Sprite.texture.Apply();
     }
 
@@ -1251,7 +1259,7 @@ public class Test : MonoBehaviour
                 var reader = new NetworkReader(recvBuffer);
 
                 {
-                    Type type = (Type)reader.ReadInt32();
+                    Type type = (Type) reader.ReadByte();
 
                     if (type == Type.Tilemap)
                     {
@@ -1477,7 +1485,7 @@ public class Test : MonoBehaviour
             bytes = bytes.Skip(size).ToArray();
 
             var writer = new NetworkWriter();
-            writer.Write((int) Type.AvatarChunk);
+            writer.Write((byte) Type.AvatarChunk);
             writer.Write(avatar.id);
             writer.Write(offset);
             writer.WriteBytesFull(CrunchBytes(chunk));
@@ -1538,7 +1546,7 @@ public class Test : MonoBehaviour
             bytes = bytes.Skip(size).ToArray();
 
             var writer = new NetworkWriter();
-            writer.Write((int)Type.TileChunk);
+            writer.Write((byte) Type.TileChunk);
             writer.Write(tile);
             writer.Write(offset);
             writer.WriteBytesFull(CrunchBytes(chunk));
@@ -1620,7 +1628,7 @@ public class Test : MonoBehaviour
         {
             var writer = new NetworkWriter();
 
-            writer.Write((int) Type.Tilemap);
+            writer.Write((byte) Type.Tilemap);
             writer.WriteBytesFull(world.tilemap);
 
             Send(connectionID, writer.AsArray(), 1);
@@ -1629,7 +1637,7 @@ public class Test : MonoBehaviour
         {
             var writer = new NetworkWriter();
 
-            writer.Write((int) Type.Palette);
+            writer.Write((byte) Type.Palette);
             
             for (int i = 0; i < 16; ++i) writer.Write((Color32) world.palette[i]);
 
@@ -1639,7 +1647,7 @@ public class Test : MonoBehaviour
         {
             var writer = new NetworkWriter();
 
-            writer.Write((int) Type.Walls);
+            writer.Write((byte) Type.Walls);
             writer.WriteBytesFull(world.walls.ToArray());
 
             Send(connectionID, writer.AsArray(), 1);
