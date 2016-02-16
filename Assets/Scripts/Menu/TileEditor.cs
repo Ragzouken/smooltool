@@ -89,6 +89,8 @@ public class TileEditor : MonoBehaviour
                                                (int) rect.height, 
                                                clipboard);
             tileImage.sprite.texture.Apply();
+
+            Save();
         }
 
         var ttrans = tileImage.transform as RectTransform;
