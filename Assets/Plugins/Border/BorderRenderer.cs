@@ -31,6 +31,13 @@ namespace PixelBorder
         private void Update()
         {
             //return;
+        
+            if (!material.shader.isSupported)
+            {
+                image.enabled = false;
+
+                return;
+            }
 
             if (sourceSprite != null
              && image        != null

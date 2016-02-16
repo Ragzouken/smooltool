@@ -47,6 +47,24 @@
 			float2 _DstPixel;
 			float2 _Scale;
 
+			sampler2D _MainTex;
+
+			float check(float2 final, float2 pixel, float2 offset)
+			{
+				float2 coord = final + pixel * offset;
+				half4 neighbour = tex2D(_MainTex, coord);
+
+				if (coord.x < _SpriteUV.x
+					|| coord.y < _SpriteUV.y
+					|| coord.x > _SpriteUV.z
+					|| coord.y > _SpriteUV.w)
+				{
+					neighbour *= 0;
+				}
+
+				return neighbour.a;
+			}
+
             v2f vert(appdata_t IN)
             {
                 v2f OUT;
@@ -62,8 +80,6 @@
                 OUT.color = IN.color * _Color;
                 return OUT;
             }
-
-            sampler2D _MainTex;
 
             fixed4 frag(v2f IN) : SV_Target
             {
@@ -86,39 +102,29 @@
                     color *= 0;
                 }
 
-				float2 coord;
-				half4 neighbour;
-				float mult = 1;
+				float mult = 0;
 
-                for (int x = -1; x <= 1; ++x)
-                {
-                    for (int y = -1; y <= 1; ++y)
-                    {
-                        coord = final + pixel * float2(x, y);
-                        neighbour = tex2D(_MainTex, coord);
+				mult += check(final, pixel, float2( 0,  1));
+				mult += check(final, pixel, float2( 0, -1));
+				mult += check(final, pixel, float2( 1,  1));
+				mult += check(final, pixel, float2( 1, -1));
+				mult += check(final, pixel, float2(-1,  1));
+				mult += check(final, pixel, float2(-1, -1));
+				mult += check(final, pixel, float2(-1,  0));
+				mult += check(final, pixel, float2( 1,  0));
 
-                        if (coord.x < _SpriteUV.x
-                         || coord.y < _SpriteUV.y
-                         || coord.x > _SpriteUV.z
-                         || coord.y > _SpriteUV.w)
-                        {
-                            neighbour *= 0;
-                        }
+				mult *= 1 - check(final, pixel, float2(0, 0));
 
-                        float d = abs(x) + abs(y);
-
-                        if (neighbour.a > 0
-						 && d <= 2)
-                        {
-                            color = fixed4(1, 1, 1, 1);
-                        }
-
-						if (d == 0 && neighbour.a > 0) mult = 0;
-                    }
-                }
-
-                return color * mult;
+				if (mult > 0)
+				{
+					return fixed4(1, 1, 1, 1);
+				}
+				else
+				{
+					return fixed4(0, 0, 0, 0);
+				}
             }
+
             ENDCG
         }
     }
