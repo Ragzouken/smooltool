@@ -162,6 +162,31 @@ public class Test : MonoBehaviour
                                delegate { });
     }
 
+    private void SaveWorld(string path)
+    {
+        var root = Application.persistentDataPath;
+        var dir = root + "/worlds/" + path;
+
+        System.IO.Directory.CreateDirectory(dir);
+
+        System.IO.File.WriteAllBytes(dir + "/tileset.png", 
+                                     world.tileset.EncodeToPNG());
+        System.IO.File.WriteAllText(dir + "/world.json",
+                                    JsonWrapper.Serialise(world));
+    }
+
+    private World LoadWorld(string path)
+    {
+        var root = Application.persistentDataPath;
+        var dir = root + "/worlds/" + path;
+
+        var world = JsonWrapper.Deserialise<World>(System.IO.File.ReadAllText(dir + "/world.json"));
+
+        world.tileset.LoadImage(System.IO.File.ReadAllBytes(dir + "/tileset.png"));
+
+        return world;
+    }
+
     private void SaveConfig()
     {
         var root = Application.persistentDataPath;
@@ -243,13 +268,22 @@ public class Test : MonoBehaviour
 
     private void Start()
     {
+        //world = LoadWorld("test");
+
+        ///*
         world = new World();
+        //world.StaticiseTileset();
 
         for (int i = 0; i < 1024; ++i) world.tilemap[i] = (byte)Random.Range(0, 23);
         for (int i = 0; i < 256; ++i)
         {
             if (Random.value > 0.5f) world.walls.Add((byte)i);
         }
+
+        world.tileset.SetPixels32(testtex.GetPixels32());
+        world.RandomisePalette();
+
+        //*/
 
         worldView.SetWorld(world);
 
@@ -410,25 +444,10 @@ public class Test : MonoBehaviour
                 pal2col[(byte)i] = world.palette[i];
             }
 
-            var colors = testtex.GetPixels()
-                                .Select(color => ColorToPalette(color))
-                                .Select(index => world.palette[index])
-                                .ToArray();
-
-            world.tileset.SetPixels(colors);
-            world.tileset.Apply();
-
             AddAvatar(NewAvatar(0));
 
             worldView.viewer = world.avatars[0];
-
-            colors = avatarGraphic.GetPixels()
-                                  .Select(color => ColorToPalette(color, true))
-                                  .Select(index => index == 0 ? Color.clear : world.palette[index])
-                                  .ToArray();
-
-            worldView.viewer.graphic.texture.SetPixels(colors);
-            worldView.viewer.graphic.texture.Apply();
+            world.PalettiseTexture(worldView.viewer.graphic.texture, true);
 
             hostID = NetworkTransport.AddHost(topology, 9002);
         }
@@ -872,11 +891,6 @@ public class Test : MonoBehaviour
                  4, index,
                  4, (uint) size);
 
-        /*
-        Debug.LogFormat("line from {0}, {1} to {2}, {3} of color {4} and size {5}",
-                        sx, sy, ex, ey, index, size);
-        */
-
         return writer.ToArray();
     }
 
@@ -885,16 +899,6 @@ public class Test : MonoBehaviour
     {
         byte tile = reader.ReadByte();
         uint[] values = UnpackBits(reader, 5, 5, 5, 5, 4, 4);
-
-        /*
-        Debug.LogFormat("line from {0}, {1} to {2}, {3} of color {4} and size {5}",
-                        values[0],
-                        values[1],
-                        values[2],
-                        values[3],
-                        values[4],
-                        values[5]);
-        */
 
         Vector2 start = new Vector2(values[0], values[1]);
         Vector2 end = new Vector2(values[2], values[3]);
@@ -1408,6 +1412,11 @@ public class Test : MonoBehaviour
         NetworkTransport.Shutdown();
 
         SaveConfig();
+
+        if (hostID != -1)
+        {
+            SaveWorld("test");
+        }
     }
 
     void StartServer(CreateMatchResponse response)
@@ -1631,7 +1640,7 @@ public class Test : MonoBehaviour
             writer.Write((byte) Type.Tilemap);
             writer.WriteBytesFull(world.tilemap);
 
-            Send(connectionID, writer.AsArray(), 1);
+            Send(connectionID, writer.AsArray());
         }
 
         {
@@ -1641,7 +1650,7 @@ public class Test : MonoBehaviour
             
             for (int i = 0; i < 16; ++i) writer.Write((Color32) world.palette[i]);
 
-            Send(connectionID, writer.AsArray(), 1);
+            Send(connectionID, writer.AsArray());
         }
 
         {
@@ -1650,16 +1659,16 @@ public class Test : MonoBehaviour
             writer.Write((byte) Type.Walls);
             writer.WriteBytesFull(world.walls.ToArray());
 
-            Send(connectionID, writer.AsArray(), 1);
+            Send(connectionID, writer.AsArray());
         }
 
         foreach (var avatar in world.avatars)
         {
-            Send(connectionID, ReplicateAvatarMessage(avatar), 0);
+            Send(connectionID, ReplicateAvatarMessage(avatar));
 
             if (avatar.id == connectionID)
             {
-                Send(connectionID, GiveAvatarMessage(avatar), 0);
+                Send(connectionID, GiveAvatarMessage(avatar));
             }
             else
             {
