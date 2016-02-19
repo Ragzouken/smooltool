@@ -28,6 +28,6 @@ public class SavedWorldPanel : MonoBehaviour
         this.world = world;
 
         nameText.text = world.name;
-        lastPlayText.text = world.lastPlayed.ToShortDateString();
+        lastPlayText.text = string.Format("{0} days", (System.DateTime.Today - world.lastPlayed).Days);
     }
 }

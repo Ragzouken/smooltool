@@ -94,9 +94,10 @@ public class Test : MonoBehaviour
         PRE4,
         PRE5,
         PRE6,
+        PRE7,
     }
 
-    public static Version version = Version.DEV;
+    public static Version version = Version.PRE7;
 
     private void Awake()
     {
@@ -156,10 +157,17 @@ public class Test : MonoBehaviour
                                delegate { });
     }
 
-    private void SaveWorld(string path)
+    private void SaveWorld(string path, string name=null)
     {
         var root = Application.persistentDataPath;
         var dir = root + "/worlds/" + path;
+        var info = new World.Info
+        {
+            version = version,
+            name = name ?? path,
+            root = path,
+            lastPlayed = System.DateTime.Today,
+        };
 
         Directory.CreateDirectory(dir);
 
@@ -167,6 +175,8 @@ public class Test : MonoBehaviour
                            world.tileset.EncodeToPNG());
         File.WriteAllText(dir + "/world.json",
                           JsonWrapper.Serialise(world));
+        File.WriteAllText(dir + "/info.json",
+                          JsonWrapper.Serialise(info));
     }
 
     private World LoadWorld(string path)
@@ -214,7 +224,7 @@ public class Test : MonoBehaviour
 
         try
         {
-            string data = System.IO.File.ReadAllText(root + "/settings/config.json");
+            string data = File.ReadAllText(root + "/settings/config.json");
 
             var config = JsonWrapper.Deserialise<Config>(data);
 
@@ -231,9 +241,10 @@ public class Test : MonoBehaviour
         world = new World();
         info = new World.Info
         {
-            lastPlayed = new System.DateTime(),
+            version = version,
+            lastPlayed = System.DateTime.Now,
             name = name,
-            root = name,
+            root = string.Format("{0}-{1}", name, System.DateTime.Now.Ticks),
         };
 
         for (int i = 0; i < 1024; ++i) world.tilemap[i] = (byte) Random.Range(0, 23);
@@ -246,7 +257,7 @@ public class Test : MonoBehaviour
         world.RandomisePalette();
         world.PalettiseTexture(world.tileset);
 
-        worldView.SetWorld(world);
+        SetWorld(world);
 
         var create = new CreateMatchRequest();
         create.name = name;
@@ -266,7 +277,7 @@ public class Test : MonoBehaviour
         this.world = LoadWorld(world.root);
         info = world;
 
-        worldView.SetWorld(this.world);
+        SetWorld(this.world);
 
         var create = new CreateMatchRequest();
         create.name = name;
@@ -304,10 +315,6 @@ public class Test : MonoBehaviour
     private void Start()
     {
         StartCoroutine(RefreshList());
-
-        tilePalette.Setup(world,
-                          locks,
-                          RequestTile);
     }
 
     private void RefreshLockButtons()
@@ -394,13 +401,22 @@ public class Test : MonoBehaviour
         detailsDisableObject.SetActive(false);
     }
 
+    private void SetWorld(World world)
+    {
+        worldView.SetWorld(world);
+
+        tilePalette.Setup(world,
+                          locks,
+                          RequestTile);
+    }
+
     private void OnClickedEnter()
     {
         if (selected != null)
         {
             world = new World();
             world.StaticiseTileset();
-            worldView.SetWorld(world);
+            SetWorld(world);
 
             group.interactable = false;
 
@@ -886,7 +902,7 @@ public class Test : MonoBehaviour
         uint ex = (uint) Mathf.FloorToInt(end.x);
         uint ey = (uint) Mathf.FloorToInt(end.y);
 
-        byte index = ColorToPaletteFast(color);
+        byte index = world.ColorToPalette(color);
 
         writer.Write((byte) Type.TileStroke);
         writer.Write(tile);
@@ -1421,7 +1437,7 @@ public class Test : MonoBehaviour
 
         if (hostID != -1)
         {
-            SaveWorld(info.root);
+            SaveWorld(info.root, info.name);
         }
     }
 
@@ -1462,21 +1478,12 @@ public class Test : MonoBehaviour
              + Mathf.Abs(a.b - b.b);
     }
 
-    private byte ColorToPaletteFast(Color color, bool clearzero=false)
-    {
-        if (clearzero && color.a == 0) return 0;
-
-        var indices = Enumerable.Range(clearzero ? 1 : 0, clearzero ? 15 : 16);
-
-        return (byte) indices.Best(i => ColorDistance(color, world.palette[i]), lowest: true);
-    }
-
     private byte[][] AvatarInChunksMessages(World world,
                                             World.Avatar avatar,
                                             int size = 128)
     {
         Color32[] colors = avatar.graphic.texture.GetPixels32();
-        byte[] bytes = colors.Select(c => ColorToPaletteFast(c, true)).ToArray();
+        byte[] bytes = colors.Select(c => world.ColorToPalette(c, true)).ToArray();
         byte[] chunk;
 
         int offset = 0;
@@ -1537,7 +1544,7 @@ public class Test : MonoBehaviour
         int y = tile / 16;
 
         Color[] colors = world.tileset.GetPixels(x * 32, y * 32, 32, 32);
-        byte[] bytes = colors.Select(c => ColorToPaletteFast(c)).ToArray();
+        byte[] bytes = colors.Select(c => world.ColorToPalette(c)).ToArray();
         byte[] chunk;
 
         int offset = 0;
@@ -1681,18 +1688,26 @@ public class Test : MonoBehaviour
 
     public static IEnumerable<World.Info> GetSavedWorlds()
     {
-        var root = Application.persistentDataPath + "/worlds";
+        var worlds = Application.persistentDataPath + "/worlds";
 
-        Directory.CreateDirectory(root);
+        Directory.CreateDirectory(worlds);
 
-        foreach (var folder in Directory.GetDirectories(root))
+        foreach (var folder in Directory.GetDirectories(worlds))
         {
-            yield return new World.Info
+            string root = Path.GetFileName(folder);
+            World.Info info = null;
+
+            try
             {
-                name = Path.GetFileName(folder),
-                root = Path.GetFileName(folder),
-                lastPlayed = new System.DateTime(),
-            };
+                info = JsonWrapper.Deserialise<World.Info>(File.ReadAllText(folder + "/info.json"));
+                info.root = root;
+            }
+            catch (System.Exception exception)
+            {
+                Debug.LogWarningFormat("Couldn't read world info for {0}\n{1}", root, exception);
+            }
+
+            if (info != null) yield return info;
         }
     }
 }

@@ -74,6 +74,6 @@ public class ChatOverlay : MonoBehaviour
     {
         if (log == null) return;
 
-        log.SetActive(messages.Reverse().Take(8).Reverse());
+        log.SetActive(messages.Reverse().Take(16).Reverse());
     }
 }

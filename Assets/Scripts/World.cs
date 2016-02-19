@@ -10,9 +10,12 @@ using Newtonsoft.Json;
 [JsonObject(MemberSerialization = MemberSerialization.OptIn)]
 public class World
 {
+    [JsonObject(IsReference = false)]
     public class Info
     {
+        public Test.Version version;
         public string name;
+        [JsonIgnore]
         public string root;
         public System.DateTime lastPlayed;
     }
