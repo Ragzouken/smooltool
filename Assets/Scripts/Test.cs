@@ -14,6 +14,8 @@ using UnityEngine.SceneManagement;
 using PixelDraw;
 using Newtonsoft.Json;
 
+using System.IO;
+
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -32,18 +34,10 @@ public class Test : MonoBehaviour
     [SerializeField] private AudioClip speakSound;
     [SerializeField] private AudioClip placeSound;
 
-    private Dictionary<Color32, byte> col2pal = new Dictionary<Color32, byte>();
-    private Dictionary<byte, Color32> pal2col = new Dictionary<byte, Color32>();
-
     [SerializeField] private CanvasGroup group;
     [SerializeField] private Texture2D testtex;
     [SerializeField] private WorldView worldView;
     [SerializeField] private Popups popups;
-
-    [Header("Host")]
-    [SerializeField] private InputField titleInput;
-    [SerializeField] private InputField hostPasswordInput;
-    [SerializeField] private Button createButton;
 
     [Header("List")]
     [SerializeField] private Transform worldContainer;
@@ -67,6 +61,7 @@ public class Test : MonoBehaviour
 
     [Header("UI")]
     [SerializeField] private TileEditor tileEditor;
+    [SerializeField] private HostTab hostTab;
     [SerializeField] private CustomiseTab customiseTab;
     [SerializeField] private TilePalette tilePalette;
     [SerializeField] private ChatOverlay chatOverlay;
@@ -101,7 +96,7 @@ public class Test : MonoBehaviour
         PRE6,
     }
 
-    public static Version version = Version.PRE6;
+    public static Version version = Version.DEV;
 
     private void Awake()
     {
@@ -110,7 +105,6 @@ public class Test : MonoBehaviour
         match = gameObject.AddComponent<NetworkMatch>();
         match.baseUri = new System.Uri("https://eu1-mm.unet.unity3d.com");
 
-        createButton.onClick.AddListener(OnClickedCreate);
         enterButton.onClick.AddListener(OnClickedEnter);
 
         worlds = new MonoBehaviourPooler<MatchDesc, WorldPanel>(worldPrefab,
@@ -167,12 +161,12 @@ public class Test : MonoBehaviour
         var root = Application.persistentDataPath;
         var dir = root + "/worlds/" + path;
 
-        System.IO.Directory.CreateDirectory(dir);
+        Directory.CreateDirectory(dir);
 
-        System.IO.File.WriteAllBytes(dir + "/tileset.png", 
-                                     world.tileset.EncodeToPNG());
-        System.IO.File.WriteAllText(dir + "/world.json",
-                                    JsonWrapper.Serialise(world));
+        File.WriteAllBytes(dir + "/tileset.png", 
+                           world.tileset.EncodeToPNG());
+        File.WriteAllText(dir + "/world.json",
+                          JsonWrapper.Serialise(world));
     }
 
     private World LoadWorld(string path)
@@ -180,9 +174,9 @@ public class Test : MonoBehaviour
         var root = Application.persistentDataPath;
         var dir = root + "/worlds/" + path;
 
-        var world = JsonWrapper.Deserialise<World>(System.IO.File.ReadAllText(dir + "/world.json"));
+        var world = JsonWrapper.Deserialise<World>( File.ReadAllText(dir + "/world.json"));
 
-        world.tileset.LoadImage(System.IO.File.ReadAllBytes(dir + "/tileset.png"));
+        world.tileset.LoadImage(File.ReadAllBytes(dir + "/tileset.png"));
 
         return world;
     }
@@ -191,21 +185,21 @@ public class Test : MonoBehaviour
     {
         var root = Application.persistentDataPath;
 
-        System.IO.Directory.CreateDirectory(root + "/settings");
-        System.IO.File.WriteAllBytes(root + "/settings/avatar.png", avatarGraphic.EncodeToPNG());
+        Directory.CreateDirectory(root + "/settings");
+        File.WriteAllBytes(root + "/settings/avatar.png", avatarGraphic.EncodeToPNG());
 
-        System.IO.File.WriteAllText(root + "/settings/config.json",
-                                    JsonWrapper.Serialise(new Config
-                                    {
-                                        name = avatarGraphic.name,
-                                    }));
+        File.WriteAllText(root + "/settings/config.json",
+                            JsonWrapper.Serialise(new Config
+                            {
+                                name = avatarGraphic.name,
+                            }));
     }
 
     private void LoadConfig()
     {
         var root = Application.persistentDataPath;
 
-        System.IO.Directory.CreateDirectory(root + "/settings");
+        Directory.CreateDirectory(root + "/settings");
 
         try
         {
@@ -232,13 +226,53 @@ public class Test : MonoBehaviour
         }
     }
 
-    private void OnClickedCreate()
+    public void HostGame(string name, string password)
     {
+        world = new World();
+        info = new World.Info
+        {
+            lastPlayed = new System.DateTime(),
+            name = name,
+            root = name,
+        };
+
+        for (int i = 0; i < 1024; ++i) world.tilemap[i] = (byte) Random.Range(0, 23);
+        for (int i = 0; i < 256; ++i)
+        {
+            if (Random.value > 0.5f) world.walls.Add((byte)i);
+        }
+
+        world.tileset.SetPixels32(testtex.GetPixels32());
+        world.RandomisePalette();
+        world.PalettiseTexture(world.tileset);
+
+        worldView.SetWorld(world);
+
         var create = new CreateMatchRequest();
-        create.name = titleInput.text;
+        create.name = name;
         create.size = 8;
         create.advertise = true;
-        create.password = hostPasswordInput.text;
+        create.password = password;
+
+        create.name += "!" + (int)version;
+
+        match.CreateMatch(create, OnMatchCreate);
+    }
+
+    public void HostGame(World.Info world,
+                         string name,
+                         string password)
+    {
+        this.world = LoadWorld(world.root);
+        info = world;
+
+        worldView.SetWorld(this.world);
+
+        var create = new CreateMatchRequest();
+        create.name = name;
+        create.size = 8;
+        create.advertise = true;
+        create.password = password;
 
         create.name += "!" + (int)version;
 
@@ -265,28 +299,10 @@ public class Test : MonoBehaviour
     }
 
     public World world;
+    public World.Info info;
 
     private void Start()
     {
-        //world = LoadWorld("test");
-
-        ///*
-        world = new World();
-        //world.StaticiseTileset();
-
-        for (int i = 0; i < 1024; ++i) world.tilemap[i] = (byte)Random.Range(0, 23);
-        for (int i = 0; i < 256; ++i)
-        {
-            if (Random.value > 0.5f) world.walls.Add((byte)i);
-        }
-
-        world.tileset.SetPixels32(testtex.GetPixels32());
-        world.RandomisePalette();
-
-        //*/
-
-        worldView.SetWorld(world);
-
         StartCoroutine(RefreshList());
 
         tilePalette.Setup(world,
@@ -382,6 +398,10 @@ public class Test : MonoBehaviour
     {
         if (selected != null)
         {
+            world = new World();
+            world.StaticiseTileset();
+            worldView.SetWorld(world);
+
             group.interactable = false;
 
             match.JoinMatch(selected.networkId, passwordInput.text, OnMatchJoined);
@@ -433,17 +453,8 @@ public class Test : MonoBehaviour
 
         this.hosting = hosting;
 
-        col2pal.Clear();
-        pal2col.Clear();
-
         if (hosting)
         {
-            for (int i = 0; i < 16; ++i)
-            {
-                col2pal[world.palette[i]] = (byte)i;
-                pal2col[(byte)i] = world.palette[i];
-            }
-
             AddAvatar(NewAvatar(0));
 
             worldView.viewer = world.avatars[0];
@@ -1086,10 +1097,12 @@ public class Test : MonoBehaviour
             {
                 OnApplicationQuit();
                 SceneManager.LoadScene("test");
+                return;
             }
             else
             {
                 Application.Quit();
+                return;
             }
         }
 
@@ -1271,9 +1284,6 @@ public class Test : MonoBehaviour
                         for (int i = 0; i < 16; ++i)
                         {
                             world.palette[i] = reader.ReadColor32();
-
-                            col2pal[world.palette[i]] = (byte)i;
-                            pal2col[(byte)i] = world.palette[i];
                         }
                     }
                     else if (type == Type.Walls)
@@ -1299,7 +1309,7 @@ public class Test : MonoBehaviour
 
                         int tile = reader.ReadByte();
 
-                        colors = reader.ReadBytesAndSize().Select(pal => pal2col[pal]).ToArray();
+                        colors = reader.ReadBytesAndSize().Select(pal => (Color32) world.palette[pal]).ToArray();
 
                         int x = tile % 16;
                         int y = tile / 16;
@@ -1411,7 +1421,7 @@ public class Test : MonoBehaviour
 
         if (hostID != -1)
         {
-            SaveWorld("test");
+            SaveWorld(info.root);
         }
     }
 
@@ -1452,24 +1462,13 @@ public class Test : MonoBehaviour
              + Mathf.Abs(a.b - b.b);
     }
 
-    private byte ColorToPalette(Color color, bool clearzero=false)
-    {
-        if (clearzero && color.a == 0) return 0;
-
-        Color nearest = world.palette.Skip(clearzero ? 1 : 0).OrderBy(other => ColorDistance(color, other)).First();
-        int index = Mathf.Max(System.Array.IndexOf(world.palette, nearest), 0);
-        
-        return (byte) index;
-    }
-
     private byte ColorToPaletteFast(Color color, bool clearzero=false)
     {
         if (clearzero && color.a == 0) return 0;
 
-        Color nearest = world.palette.Skip(clearzero ? 1 : 0).FirstOrDefault(other => ColorDistance(color, other) <= 3);
-        int index = Mathf.Max(System.Array.IndexOf(world.palette, nearest), 0);
+        var indices = Enumerable.Range(clearzero ? 1 : 0, clearzero ? 15 : 16);
 
-        return (byte)index;
+        return (byte) indices.Best(i => ColorDistance(color, world.palette[i]), lowest: true);
     }
 
     private byte[][] AvatarInChunksMessages(World world,
@@ -1677,6 +1676,23 @@ public class Test : MonoBehaviour
             yield return new WaitForSeconds(0.125f);
 
             Send(connectionID, TileInChunksMessages(world, (byte) i));
+        }
+    }
+
+    public static IEnumerable<World.Info> GetSavedWorlds()
+    {
+        var root = Application.persistentDataPath + "/worlds";
+
+        Directory.CreateDirectory(root);
+
+        foreach (var folder in Directory.GetDirectories(root))
+        {
+            yield return new World.Info
+            {
+                name = Path.GetFileName(folder),
+                root = Path.GetFileName(folder),
+                lastPlayed = new System.DateTime(),
+            };
         }
     }
 }

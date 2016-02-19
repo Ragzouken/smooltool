@@ -47,6 +47,21 @@ public class MonoBehaviourPooler<TShortcut, TInstance>
         Cleanup = cleanup ?? delegate { };
     }
 
+    public IEnumerator Preload(int count, bool wake=false)
+    {
+        count -= spare.Count;
+
+        for (int i = 0; i < count; ++i)
+        {
+            TInstance instance = Object.Instantiate(Prefab);
+            instance.gameObject.SetActive(false);
+
+            spare.Push(instance);
+
+            yield return null;
+        }
+    }
+
     protected TInstance New(TShortcut shortcut)
     {
         TInstance instance;

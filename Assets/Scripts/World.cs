@@ -10,6 +10,13 @@ using Newtonsoft.Json;
 [JsonObject(MemberSerialization = MemberSerialization.OptIn)]
 public class World
 {
+    public class Info
+    {
+        public string name;
+        public string root;
+        public System.DateTime lastPlayed;
+    }
+
     public class Avatar
     {
         public int id;
@@ -139,18 +146,27 @@ public class World
             palette[i] = color;
         }
         */
-
-        PalettiseTexture(tileset);
     }
 
     public byte ColorToPalette(Color color, bool clearzero = false)
     {
         if (clearzero && color.a == 0) return 0;
 
-        Color nearest = palette.Skip(clearzero ? 1 : 0).OrderBy(other => Test.ColorDistance(color, other)).First();
-        int index = Mathf.Max(System.Array.IndexOf(palette, nearest), 0);
+        float bestDistance = 255f;
+        int bestIndex = 0;
 
-        return (byte)index;
+        for (int i = 0; i < palette.Length; ++i)
+        {
+            float distance = Test.ColorDistance(color, palette[i]);
+
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                bestIndex = i;
+            }
+        }
+
+        return (byte) bestIndex;
     }
 
     public void PalettiseTexture(Texture2D texture, bool clearzero = false)
@@ -161,6 +177,23 @@ public class World
                             .ToArray();
 
         texture.SetPixels(colors);
+        texture.Apply();
+    }
+
+    public IEnumerator PalettiseTextureCO(Texture2D texture, bool clearzero = false)
+    {
+        Color32[] pixels = texture.GetPixels32();
+
+        for (int i = 0; i < pixels.Length; ++i)
+        {
+            int index = ColorToPalette(pixels[i], clearzero);
+
+            pixels[i] = index == 0 && clearzero ? Color.clear : palette[index];
+
+            if (i % 1024 == 0) yield return null;
+        }
+
+        texture.SetPixels32(pixels);
         texture.Apply();
     }
 }
