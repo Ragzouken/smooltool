@@ -447,6 +447,7 @@ public class Test : MonoBehaviour
             AddAvatar(NewAvatar(0));
 
             worldView.viewer = world.avatars[0];
+            worldView.viewer.graphic.texture.SetPixels32(avatarGraphic.GetPixels32());
             world.PalettiseTexture(worldView.viewer.graphic.texture, true);
 
             hostID = NetworkTransport.AddHost(topology, 9002);
@@ -689,13 +690,8 @@ public class Test : MonoBehaviour
 
         worldView.viewer = avatar;
 
-        var colors = avatarGraphic.GetPixels()
-                                  .Select(color => ColorToPalette(color, true))
-                                  .Select(index => index == 0 ? Color.clear : world.palette[index])
-                                  .ToArray();
-
-        worldView.viewer.graphic.texture.SetPixels(colors);
-        worldView.viewer.graphic.texture.Apply();
+        avatar.graphic.texture.SetPixels32(avatarGraphic.GetPixels32());
+        world.PalettiseTexture(avatar.graphic.texture, true);
 
         SendAll(AvatarInChunksMessages(world, worldView.viewer));
     }

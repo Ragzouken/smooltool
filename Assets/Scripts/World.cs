@@ -73,6 +73,7 @@ public class World
         tileset.Apply();
     }
 
+    // TODO: just generate 3 curves (HSL) then evaluate n palette colours w them
     public void RandomisePalette()
     {
         float phase = Random.value;
@@ -100,16 +101,22 @@ public class World
             float max = min + ranges[i] - offset;
 
             hues[i] = AnimationCurve.Linear(0, min, 1, max);
-            ligs[i] = AnimationCurve.Linear(0, 0.25f + 0.25f * Random.value, 1, 1f - 0.5f * Random.value);
+            ligs[i] = AnimationCurve.Linear(0, 0.1f + 0.3f * Random.value, 1, 0.9f - 0.3f * Random.value);
         }
-
+        
         for (int r = 0; r < 4; ++r)
         {
+            bool fliph = Random.value > 0.5f;
+            bool flipl = Random.value > 0.5f;
+
             for (int i = 0; i < 4; ++i)
             {
-                float hue = hues[r].Evaluate(i / 3f) % 1;
+                float up = i / 3f;
+                float down = 1 - up;
+
+                float hue = hues[r].Evaluate(up) % 1;
                 float sat = 0.75f + Random.value * 0.25f;
-                float lig = ligs[r].Evaluate(i / 3f) % 1;
+                float lig = ligs[r].Evaluate(flipl ? up : down) % 1;
 
                 IList<double> RGB = HUSL.HUSLToRGB(new double[] { hue * 360, sat * 100, lig * 100 });
                 Color color = new Color((float) RGB[0], (float) RGB[1], (float) RGB[2], 1);
