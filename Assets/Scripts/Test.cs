@@ -1097,6 +1097,11 @@ public class Test : MonoBehaviour
         bool mapping = Input.GetKey(KeyCode.Tab)
                     && !chatting;
 
+        if (editing && !chatting)
+        {
+            tileEditor.CheckInput();
+        }
+
         if (Input.GetKeyDown(KeyCode.Escape))
         {
             if (chatting)
@@ -1192,11 +1197,6 @@ public class Test : MonoBehaviour
         else
         {
             tilePalette.Hide();
-        }
-
-        if (editing && !chatting)
-        {
-            tileEditor.CheckInput();
         }
 
         if (!UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject()

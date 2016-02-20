@@ -200,7 +200,7 @@ public class TileEditor : MonoBehaviour
 
         Rect rect = tileImage.sprite.textureRect;
 
-        cursorBrush = Brush.Circle(brushSize, brushColor);
+        cursorBrush = Brush.Circle(brushSize, brushColor.a != 0 ? brushColor : CycleHue.Flash(1, 1, .75f));
         cursorBrush.sprite.texture.Apply();
 
         var btrans = brushCursor.transform as RectTransform;
@@ -218,13 +218,13 @@ public class TileEditor : MonoBehaviour
         bool picker = Input.GetKey(KeyCode.LeftAlt) || Input.GetKeyDown(KeyCode.RightAlt);
         bool fill = shift;
 
-        brushCursor.gameObject.SetActive(inside && !picker);
+        brushCursor.gameObject.SetActive(inside && !picker && !fill);
 
         Sprite sprite = tileImage.sprite;
 
         if (Input.GetMouseButtonDown(0) && fill)
         {
-            Stroke(cursor, cursor, brushColor, 0);
+            if (Stroke != null) Stroke(cursor, cursor, brushColor, 0);
 
             sprite.texture.FloodFillAreaNPO2((int) cursor.x, 
                                              (int) cursor.y, 

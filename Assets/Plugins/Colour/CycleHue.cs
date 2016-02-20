@@ -23,10 +23,18 @@ public class CycleHue : MonoBehaviour
 
     protected void Update()
     {
+        Image.color = Flash(period, Saturation / 100f, Lightness / 100f, alpha);
+    }
+
+    public static Color Flash(float period, 
+                              float saturation, 
+                              float lightness,
+                              float alpha = 1)
+    {
         float hue = (Time.timeSinceLevelLoad / period) % 1f;
-        
-        IList<double> RGB = HUSL.HUSLPToRGB(new double[] { hue * 360, Saturation, Lightness });
-        
-        Image.color = new Color((float) RGB[0], (float) RGB[1], (float) RGB[2], alpha);
+
+        IList<double> RGB = HUSL.HUSLPToRGB(new double[] { hue * 360, saturation * 100, lightness * 100 });
+
+        return new Color((float)RGB[0], (float)RGB[1], (float)RGB[2], alpha);
     }
 }
