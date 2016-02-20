@@ -11,6 +11,9 @@ using PixelDraw;
 public class TileEditor : MonoBehaviour 
 {
     [SerializeField] private Button saveButton;
+    [SerializeField] private Button copyButton;
+    [SerializeField] private Button pasteButton;
+
     [SerializeField] private Image tileImage;
     [SerializeField] private Image brushCursor;
 
@@ -28,6 +31,8 @@ public class TileEditor : MonoBehaviour
     private void Awake()
     {
         saveButton.onClick.AddListener(OnClickedSave);
+        copyButton.onClick.AddListener(Copy);
+        pasteButton.onClick.AddListener(Paste);
 
         for (int i = 0; i < sizeToggles.Length; ++i)
         {
@@ -87,6 +92,12 @@ public class TileEditor : MonoBehaviour
 
     public void CheckInput()
     {
+        bool control = Input.GetKey(KeyCode.LeftControl) 
+                    || Input.GetKey(KeyCode.RightControl);
+
+        bool shift = Input.GetKey(KeyCode.LeftShift)
+                  || Input.GetKey(KeyCode.RightShift);
+
         for (int i = 1; i <= 6; ++i)
         {
             if (Input.GetKeyDown(numberCodes[i]))
@@ -101,6 +112,15 @@ public class TileEditor : MonoBehaviour
             {
                 SetBrushColorIndex(i);
             }
+        }
+
+        if (control && Input.GetKeyDown(KeyCode.C))
+        {
+            Copy();
+        }
+        else if (control && Input.GetKeyDown(KeyCode.V))
+        {
+            Paste();
         }
     }
 
@@ -127,6 +147,32 @@ public class TileEditor : MonoBehaviour
         }
     }
 
+    public void Copy()
+    {
+        Rect rect = tileImage.sprite.textureRect;
+
+        clipboard = tileImage.sprite.texture.GetPixels((int)rect.x,
+                                                       (int)rect.y,
+                                                       (int)rect.width,
+                                                       (int)rect.height);
+    }
+
+    public void Paste()
+    {
+        if (clipboard == null) return;
+
+        Rect rect = tileImage.sprite.textureRect;
+
+        tileImage.sprite.texture.SetPixels((int)rect.x,
+                                           (int)rect.y,
+                                           (int)rect.width,
+                                           (int)rect.height,
+                                           clipboard);
+        tileImage.sprite.texture.Apply();
+
+        Save();
+    }
+
     private void Update()
     {
         bool control = Input.GetKey(KeyCode.LeftControl) 
@@ -135,28 +181,7 @@ public class TileEditor : MonoBehaviour
         bool shift = Input.GetKey(KeyCode.LeftShift)
                   || Input.GetKey(KeyCode.RightShift);
 
-        Rect rect = tileImage.sprite.textureRect;
-
-        if (control && Input.GetKeyDown(KeyCode.C))
-        {
-            clipboard = tileImage.sprite.texture.GetPixels((int) rect.x,
-                                                           (int) rect.y,
-                                                           (int) rect.width,
-                                                           (int) rect.height);
-        }
-        else if (control
-              && Input.GetKeyDown(KeyCode.V)
-              && clipboard != null)
-        {
-            tileImage.sprite.texture.SetPixels((int) rect.x, 
-                                               (int) rect.y, 
-                                               (int) rect.width, 
-                                               (int) rect.height, 
-                                               clipboard);
-            tileImage.sprite.texture.Apply();
-
-            Save();
-        }
+        pasteButton.interactable = clipboard != null;
 
         var ttrans = tileImage.transform as RectTransform;
 
@@ -172,6 +197,8 @@ public class TileEditor : MonoBehaviour
         cursor.y = Mathf.Floor(cursor.y);
 
         if (cursorBrush != null) Brush.Dispose(cursorBrush);
+
+        Rect rect = tileImage.sprite.textureRect;
 
         cursorBrush = Brush.Circle(brushSize, brushColor);
         cursorBrush.sprite.texture.Apply();
