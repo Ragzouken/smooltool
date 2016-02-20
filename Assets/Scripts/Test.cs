@@ -30,6 +30,10 @@ public class Test : MonoBehaviour
 
     [SerializeField] private Font[] fonts;
 
+    [SerializeField] private Camera mapCamera;
+    [SerializeField] private RenderTexture mapTexture;
+    [SerializeField] private GameObject mapObject;
+
     [SerializeField] private new AudioSource audio;
     [SerializeField] private AudioClip speakSound;
     [SerializeField] private AudioClip placeSound;
@@ -68,6 +72,8 @@ public class Test : MonoBehaviour
 
     [SerializeField] private Texture2D defaultAvatar;
     private Texture2D avatarGraphic;
+
+    private Texture2D mapTextureLocal;
 
     public struct LoggedMessage
     {
@@ -131,6 +137,8 @@ public class Test : MonoBehaviour
                            ResetAvatar);
 
         LoadConfig();
+
+        mapTextureLocal = new Texture2D(1024, 1024);
     }
 
     private void InitialiseWorld(MatchDesc desc, WorldPanel panel)
@@ -1096,6 +1104,8 @@ public class Test : MonoBehaviour
     {
         bool editing = tileEditor.gameObject.activeSelf;
         bool chatting = chatOverlay.gameObject.activeSelf;
+        bool mapping = Input.GetKey(KeyCode.Tab)
+                    && !chatting;
 
         if (Input.GetKeyDown(KeyCode.Escape))
         {
@@ -1119,8 +1129,34 @@ public class Test : MonoBehaviour
                 return;
             }
         }
+        else if (Input.GetKeyDown(KeyCode.F12))
+        {
+            string selfies = Application.persistentDataPath + "/selfies";
+
+            Directory.CreateDirectory(selfies);
+
+            Application.CaptureScreenshot(string.Format("{0}/{1}.png", selfies, System.DateTime.Now.Ticks));
+        }
+        else if (Input.GetKeyDown(KeyCode.F11))
+        {
+            string maps = Application.persistentDataPath + "/maps";
+
+            Directory.CreateDirectory(maps);
+
+            mapCamera.Render();
+
+            var old = RenderTexture.active;
+            RenderTexture.active = mapTexture;
+            mapTextureLocal.ReadPixels(Rect.MinMaxRect(0, 0, 1024, 1024), 0, 0);
+            RenderTexture.active = old;
+
+            File.WriteAllBytes(string.Format("{0}/{1}.png", maps, System.DateTime.Now.Ticks), mapTextureLocal.EncodeToPNG());
+        }
 
         if (hostID == -1) return;
+
+        mapCamera.gameObject.SetActive(mapping);
+        mapObject.SetActive(mapping);
 
         if (Input.GetKeyDown(KeyCode.Return))
         {
