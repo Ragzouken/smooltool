@@ -52,7 +52,7 @@ public class HostTab : MonoBehaviour
 
     private void OnEnable()
     {
-        worlds.SetActive(Test.GetSavedWorlds());
+        worlds.SetActive(Test.GetSavedWorlds().OrderByDescending(w => w.lastPlayed.Ticks));
         generateToggle.transform.SetAsLastSibling();
 
         passwordInput.text = "";

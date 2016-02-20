@@ -158,7 +158,7 @@ public class World
         float bestDistance = 255f;
         int bestIndex = 0;
 
-        for (int i = 0; i < palette.Length; ++i)
+        for (int i = clearzero ? 1 : 0; i < palette.Length; ++i)
         {
             float distance = Test.ColorDistance(color, palette[i]);
 
