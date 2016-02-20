@@ -17,6 +17,9 @@ public class TileEditor : MonoBehaviour
     [SerializeField] private Toggle[] sizeToggles; 
     [SerializeField] private Toggle[] colorToggles;
 
+    [SerializeField] private GameObject repeatObject;
+    [SerializeField] private Image[] repeatImages;
+
     private Action Save;
     private Action Commit;
     private Action<Vector2, Vector2, Color, int> Stroke;
@@ -33,7 +36,7 @@ public class TileEditor : MonoBehaviour
 
             sizeToggle.onValueChanged.AddListener(active =>
             {
-                brushSize = size;
+                SetBrushSize(size);
             });
         }
 
@@ -45,7 +48,7 @@ public class TileEditor : MonoBehaviour
 
             sizeToggle.onValueChanged.AddListener(active =>
             {
-                brushColor = palette[index];
+                SetBrushColorIndex(index);
             });
         }
     }
@@ -57,10 +60,72 @@ public class TileEditor : MonoBehaviour
     private Brush cursorBrush;
 
     private Color brushColor = Color.magenta;
+    private int brushColorIndex = 0;
     private int brushSize = 3;
 
     private float lastSaveTime;
     private Color[] clipboard;
+
+    private KeyCode[] numberCodes = {
+        KeyCode.Alpha0,
+        KeyCode.Alpha1,
+        KeyCode.Alpha2,
+        KeyCode.Alpha3,
+        KeyCode.Alpha4,
+        KeyCode.Alpha5,
+        KeyCode.Alpha6,
+        KeyCode.Alpha7,
+        KeyCode.Alpha8,
+        KeyCode.Alpha9,
+    };
+
+    private KeyCode[] paletteCodes =
+    {
+        KeyCode.Q, KeyCode.W, KeyCode.E, KeyCode.R, KeyCode.T, KeyCode.Y, KeyCode.U, KeyCode.I,
+        KeyCode.A, KeyCode.S, KeyCode.D, KeyCode.F, KeyCode.G, KeyCode.H, KeyCode.J, KeyCode.K,
+    };
+
+    public void CheckInput()
+    {
+        for (int i = 1; i <= 6; ++i)
+        {
+            if (Input.GetKeyDown(numberCodes[i]))
+            {
+                SetBrushSize(i);
+            }
+        }
+
+        for (int i = 0; i < 16; ++i)
+        {
+            if (Input.GetKeyDown(paletteCodes[i]))
+            {
+                SetBrushColorIndex(i);
+            }
+        }
+    }
+
+    public void SetBrushSize(int size, bool force=false)
+    {
+        if (size != brushSize || force)
+        {
+            brushSize = size;
+
+            sizeToggles[0].group.SetAllTogglesOff();
+            sizeToggles[size - 1].isOn = true;
+        }
+    }
+
+    public void SetBrushColorIndex(int index, bool force = false)
+    {
+        if (index != brushColorIndex || force)
+        {
+            brushColorIndex = index;
+            brushColor = palette[index];
+
+            colorToggles[0].group.SetAllTogglesOff();
+            colorToggles[index].isOn = true;
+        }
+    }
 
     private void Update()
     {
@@ -194,7 +259,8 @@ public class TileEditor : MonoBehaviour
                             Sprite sprite, 
                             Action save,
                             Action commit,
-                            Action<Vector2, Vector2, Color, int> stroke=null)
+                            Action<Vector2, Vector2, Color, int> stroke=null,
+                            bool repeat=false)
     {
         gameObject.SetActive(true);
 
@@ -204,8 +270,9 @@ public class TileEditor : MonoBehaviour
         Commit = commit;
 
         Stroke = stroke;
-
-        brushColor = palette[1];
+        
+        SetBrushColorIndex(brushColorIndex, force: true);
+        SetBrushSize(brushSize, force: true);
 
         for (int i = 0; i < colorToggles.Length; ++i)
         {
@@ -213,6 +280,13 @@ public class TileEditor : MonoBehaviour
             Color color = palette[i];
 
             sizeToggle.GetComponent<Image>().color = color;
+        }
+
+        repeatObject.SetActive(repeat);
+
+        for (int i = 0; i < repeatImages.Length; ++i)
+        {
+            repeatImages[i].sprite = sprite;
         }
     }
 

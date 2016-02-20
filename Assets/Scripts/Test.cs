@@ -152,17 +152,6 @@ public class Test : MonoBehaviour
         avatarGraphic.Apply();
     }
 
-    private void OnClickedEditAvatar()
-    {
-        var palette = world.palette.ToArray();
-        palette[0] = Color.clear;
-
-        tileEditor.OpenAndEdit(palette,
-                               BlankTexture.FullSprite(avatarGraphic),
-                               SaveConfig,
-                               delegate { });
-    }
-
     private void SaveWorld(string path, string name=null)
     {
         var root = Application.persistentDataPath;
@@ -970,7 +959,8 @@ public class Test : MonoBehaviour
                                world.tiles[tile],
                                () => SendAll(TileInChunksMessages(world, tile)),
                                () => ReleaseTile(tile),
-                               (start, end, color, size) => SendStroke(tile, start, end, color, size));
+                               (start, end, color, size) => SendStroke(tile, start, end, color, size),
+                               repeat: true);
     }
 
     private void ReceiveLockTile(NetworkReader reader)
@@ -1202,6 +1192,11 @@ public class Test : MonoBehaviour
         else
         {
             tilePalette.Hide();
+        }
+
+        if (editing && !chatting)
+        {
+            tileEditor.CheckInput();
         }
 
         if (!UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject()

@@ -69,16 +69,20 @@ public class Tooltip : MonoBehaviourSingleton<Tooltip>
         ttrans.GetWorldCorners(corners);
 
         rtrans.position = Vector2.Lerp(corners[0], corners[3], 0.5f);
+
+        //Reposition(rtrans.position);
     }
 
-    public void Reposition()
+    public void Reposition(Vector3 pos)
     {
         var rtrans = transform as RectTransform;
         var ptrans = transform.parent.transform as RectTransform;
 
+        /*
         Vector3 pos;
 
         RectTransformUtility.ScreenPointToWorldPointInRectangle(ptrans, Input.mousePosition, null, out pos);
+        */
 
         rtrans.position = pos;
 
