@@ -10,6 +10,8 @@ public class ChatOverlay : MonoBehaviour
     [SerializeField] private InputField input;
     [SerializeField] private RectTransform logContainer;
     [SerializeField] private ChatLogElement logPrefab;
+    [SerializeField] private Scrollbar logScrollbar;
+    [SerializeField] private ScrollRect logScrollrect;
 
     private MonoBehaviourPooler<Test.LoggedMessage, ChatLogElement> log;
 
@@ -36,6 +38,7 @@ public class ChatOverlay : MonoBehaviour
         element.SetMessage(message.avatar, message.message);
     }
 
+    /*
     private void Update()
     {
         if (UnityEngine.EventSystems.EventSystem.current.currentSelectedGameObject != input.gameObject)
@@ -43,6 +46,7 @@ public class ChatOverlay : MonoBehaviour
             Hide();
         }
     }
+    */
 
     public void Show()
     {
@@ -52,6 +56,8 @@ public class ChatOverlay : MonoBehaviour
         
         input.text = "";
         input.Select();
+        
+        logScrollrect.verticalNormalizedPosition = 0;
     }
 
     public void Hide()
@@ -59,6 +65,8 @@ public class ChatOverlay : MonoBehaviour
         gameObject.SetActive(false);
 
         UnityEngine.EventSystems.EventSystem.current.SetSelectedGameObject(null);
+
+        logScrollrect.verticalNormalizedPosition = 0;
     }
 
     public void OnClickedSend()
@@ -74,6 +82,6 @@ public class ChatOverlay : MonoBehaviour
     {
         if (log == null) return;
 
-        log.SetActive(messages.Reverse().Take(16).Reverse());
+        log.SetActive(messages.Reverse().Take(64).Reverse());
     }
 }

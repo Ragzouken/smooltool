@@ -75,8 +75,6 @@ public class Test : MonoBehaviour
         public string message;
     }
 
-    private MonoBehaviourPooler<byte, TileToggle> tiles;
-    private MonoBehaviourPooler<LoggedMessage, ChatLogElement> chatLog;
     private List<LoggedMessage> chats = new List<LoggedMessage>();
 
     private NetworkMatch match;
