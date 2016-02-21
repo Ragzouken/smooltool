@@ -9,17 +9,17 @@ public class WorldView : MonoBehaviour
 {
     [SerializeField] private new Camera camera;
 
-    [SerializeField] private Image tilePrefab;
+    [SerializeField] private SpriteRenderer tilePrefab;
     [SerializeField] private Transform tileContainer;
 
     [SerializeField] private AvatarView avatarPrefab;
     [SerializeField] private Transform avatarContainer;
-
-    [SerializeField] private Image wallPrefab;
+    
+    [SerializeField] private SpriteRenderer wallPrefab;
     [SerializeField] private Transform wallContainer;
 
-    private Image[] tiles;
-    private Image[] walls;
+    private SpriteRenderer[] tiles;
+    private SpriteRenderer[] walls;
 
     private MonoBehaviourPooler<World.Avatar, AvatarView> avatars;
 
@@ -36,15 +36,15 @@ public class WorldView : MonoBehaviour
                                                                     avatarContainer,
                                                                     InitialiseAvatar);
 
-        tiles = new Image[1024];
-        walls = new Image[1024];
+        tiles = new SpriteRenderer[1024];
+        walls = new SpriteRenderer[1024];
 
         for (int i = 0; i < 1024; ++i)
         {
             int x = i % 32;
             int y = i / 32;
 
-            Image tile = Instantiate(tilePrefab);
+            SpriteRenderer tile = Instantiate(tilePrefab);
 
             tile.transform.SetParent(tileContainer, false);
             tile.transform.localPosition = new Vector2(x * 32 - 512, y * 32 - 512);
@@ -52,7 +52,7 @@ public class WorldView : MonoBehaviour
 
             tiles[i] = tile;
 
-            Image wall = Instantiate(wallPrefab);
+            SpriteRenderer wall = Instantiate(wallPrefab);
             wall.transform.SetParent(wallContainer, false);
             wall.transform.localPosition = new Vector2(x * 32 - 512, y * 32 - 512);
 
