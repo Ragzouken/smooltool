@@ -26,6 +26,7 @@ public class Test : MonoBehaviour
     private class Config
     {
         public string name;
+        public bool hideTutorial;
     }
 
     [SerializeField] private Font[] fonts;
@@ -70,6 +71,13 @@ public class Test : MonoBehaviour
     [SerializeField] private TilePalette tilePalette;
     [SerializeField] private ChatOverlay chatOverlay;
 
+    [Header("Tutorial")]
+    [SerializeField] private GameObject tutorialObject;
+    [SerializeField] private GameObject tutorialChat;
+    [SerializeField] private GameObject tutorialMove;
+    [SerializeField] private GameObject tutorialTile;
+    [SerializeField] private GameObject tutorialWall;
+
     [SerializeField] private Texture2D defaultAvatar;
     private Texture2D avatarGraphic;
 
@@ -85,8 +93,6 @@ public class Test : MonoBehaviour
 
     private NetworkMatch match;
 
-    private byte paintTile;
-
     public const int maxTiles = 256;
 
     public enum Version
@@ -99,13 +105,16 @@ public class Test : MonoBehaviour
         PRE5,
         PRE6,
         PRE7,
+        PRE8,
     }
 
-    public static Version version = Version.PRE7;
+    public static Version version = Version.PRE8;
 
     private void Awake()
     {
         foreach (Font font in fonts) font.material.mainTexture.filterMode = FilterMode.Point;
+
+        tutorialObject.SetActive(false);
 
         match = gameObject.AddComponent<NetworkMatch>();
         match.baseUri = new System.Uri("https://eu1-mm.unet.unity3d.com");
@@ -126,6 +135,8 @@ public class Test : MonoBehaviour
         chatOverlay.Setup(chats,
                           message =>
                           {
+                              tutorialChat.SetActive(false);
+
                               SendAll(ChatMessage(worldView.viewer, message));
 
                               Chat(worldView.viewer, message);
@@ -186,6 +197,8 @@ public class Test : MonoBehaviour
         return world;
     }
 
+    private static Config config;
+
     private void SaveConfig()
     {
         var root = Application.persistentDataPath;
@@ -193,11 +206,7 @@ public class Test : MonoBehaviour
         Directory.CreateDirectory(root + "/settings");
         File.WriteAllBytes(root + "/settings/avatar.png", avatarGraphic.EncodeToPNG());
 
-        File.WriteAllText(root + "/settings/config.json",
-                            JsonWrapper.Serialise(new Config
-                            {
-                                name = avatarGraphic.name,
-                            }));
+        File.WriteAllText(root + "/settings/config.json", JsonWrapper.Serialise(config));
     }
 
     private void LoadConfig()
@@ -208,7 +217,7 @@ public class Test : MonoBehaviour
 
         try
         {
-            byte[] avatar = System.IO.File.ReadAllBytes(root + "/settings/avatar.png");
+            byte[] avatar = File.ReadAllBytes(root + "/settings/avatar.png");
 
             avatarGraphic.LoadImage(avatar);
         }
@@ -221,13 +230,19 @@ public class Test : MonoBehaviour
         {
             string data = File.ReadAllText(root + "/settings/config.json");
 
-            var config = JsonWrapper.Deserialise<Config>(data);
+            config = JsonWrapper.Deserialise<Config>(data);
 
             avatarGraphic.name = config.name;
         }
         catch (System.Exception exception)
         {
             Debug.LogWarningFormat("Couldn't load an existing config:\n{0}", exception);
+
+            config = new Config
+            {
+                name = "player name",
+                hideTutorial = false,
+            };
         }
     }
 
@@ -1020,6 +1035,8 @@ public class Test : MonoBehaviour
 
             worldView.RefreshAvatars();
 
+            tutorialMove.SetActive(false);
+
             SendAll(MoveAvatarMessage(avatar, avatar.destination));
         }
     }
@@ -1150,6 +1167,14 @@ public class Test : MonoBehaviour
 
         if (hostID == -1) return;
 
+
+        config.hideTutorial |= !tutorialChat.activeSelf
+                            && !tutorialMove.activeSelf
+                            && !tutorialTile.activeSelf
+                            && !tutorialWall.activeSelf;
+
+        tutorialObject.SetActive(!config.hideTutorial);
+
         mapCamera.gameObject.SetActive(mapping);
         mapObject.SetActive(mapping);
 
@@ -1238,6 +1263,8 @@ public class Test : MonoBehaviour
 
                     if (this.world.walls.Set(tile, wall))
                     {
+                        tutorialWall.SetActive(false);
+
                         audio.PlayOneShot(placeSound);
                     }
 
@@ -1249,6 +1276,8 @@ public class Test : MonoBehaviour
                     {
                         audio.PlayOneShot(placeSound);
                         worldView.SetTile(location, tile);
+
+                        if (tile != 0) tutorialTile.SetActive(false);
 
                         SendAll(SetTileMessage(location, tile));
                     }

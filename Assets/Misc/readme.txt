@@ -21,6 +21,7 @@ arrows - move
 enter - chat & log
 (hold) space - show tile palette
 (hold) shift - show walls
+(hold) tab - show minimap
 left-click - place tile
 alt + left-click - copy tile from world
 
