@@ -196,11 +196,20 @@ public class TileEditor : MonoBehaviour
         cursor.x = Mathf.Floor(cursor.x);
         cursor.y = Mathf.Floor(cursor.y);
 
+        var bounds = Rect.MinMaxRect(0, 0, 32, 32);
+
+        bool inside = bounds.Contains(cursor);
+        bool picker = Input.GetKey(KeyCode.LeftAlt) || Input.GetKeyDown(KeyCode.RightAlt);
+        bool fill = shift;
+
         if (cursorBrush != null) Brush.Dispose(cursorBrush);
 
         Rect rect = tileImage.sprite.textureRect;
 
-        cursorBrush = Brush.Circle(brushSize, brushColor.a != 0 ? brushColor : CycleHue.Flash(1, 1, .75f));
+        bool flash = picker || fill || brushColor.a == 0;
+        bool single = picker || fill;
+
+        cursorBrush = Brush.Circle(single ? 1 : brushSize, flash ? CycleHue.Flash(1, 1, .75f) : brushColor);
         cursorBrush.sprite.texture.Apply();
 
         var btrans = brushCursor.transform as RectTransform;
@@ -212,15 +221,26 @@ public class TileEditor : MonoBehaviour
         btrans.anchoredPosition = cursor * 7;
         btrans.localScale = Vector3.one * 7 * 0.01f;
 
-        var bounds = Rect.MinMaxRect(0, 0, 32, 32);
-
-        bool inside = bounds.Contains(cursor);
-        bool picker = Input.GetKey(KeyCode.LeftAlt) || Input.GetKeyDown(KeyCode.RightAlt);
-        bool fill = shift;
-
-        brushCursor.gameObject.SetActive(inside && !picker && !fill);
+        brushCursor.gameObject.SetActive(inside);
 
         Sprite sprite = tileImage.sprite;
+
+        if (picker)
+        {
+            Cursors.Instance.Set(Cursors.Instance.picker);
+        }
+        else if (fill)
+        {
+            Cursors.Instance.Set(Cursors.Instance.fill);
+        }
+        else if (brushColor.a == 0)
+        {
+            Cursors.Instance.Set(Cursors.Instance.erase);
+        }
+        else
+        {
+            Cursors.Instance.Set(null);
+        }
 
         if (Input.GetMouseButtonDown(0) && fill)
         {
@@ -266,7 +286,10 @@ public class TileEditor : MonoBehaviour
                 int x = (int)(cursor.x + rect.x);
                 int y = (int)(cursor.y + rect.y);
 
-                brushColor = sprite.texture.GetPixel(x, y);
+                Color sample = sprite.texture.GetPixel(x, y);
+                bool clear = palette[0].a == 0;
+
+                SetBrushColorIndex(palette.ColorToPalette(sample, clear));
             }
         }
 

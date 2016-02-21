@@ -153,23 +153,7 @@ public class World
 
     public byte ColorToPalette(Color color, bool clearzero = false)
     {
-        if (clearzero && color.a == 0) return 0;
-
-        float bestDistance = 255f;
-        int bestIndex = 0;
-
-        for (int i = clearzero ? 1 : 0; i < palette.Length; ++i)
-        {
-            float distance = Test.ColorDistance(color, palette[i]);
-
-            if (distance < bestDistance)
-            {
-                bestDistance = distance;
-                bestIndex = i;
-            }
-        }
-
-        return (byte) bestIndex;
+        return (byte) palette.ColorToPalette(color, clearzero);
     }
 
     public void PalettiseTexture(Texture2D texture, bool clearzero = false)
