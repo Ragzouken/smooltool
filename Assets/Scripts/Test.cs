@@ -172,7 +172,7 @@ public class Test : MonoBehaviour
             version = version,
             name = name ?? path,
             root = path,
-            lastPlayed = System.DateTime.Today,
+            lastPlayed = System.DateTime.Now,
         };
 
         Directory.CreateDirectory(dir);
@@ -190,9 +190,17 @@ public class Test : MonoBehaviour
         var root = Application.persistentDataPath;
         var dir = root + "/worlds/" + path;
 
-        var world = JsonWrapper.Deserialise<World>( File.ReadAllText(dir + "/world.json"));
+        var info = JsonWrapper.Deserialise<World.Info>(File.ReadAllText(dir + "/info.json"));
+        var world = JsonWrapper.Deserialise<World>(File.ReadAllText(dir + "/world.json"));
+
+        float d = (float) (File.GetLastWriteTime(dir + "/tileset.png") - info.lastPlayed).TotalSeconds;
 
         world.tileset.LoadImage(File.ReadAllBytes(dir + "/tileset.png"));
+
+        if (d > 5)
+        {
+            world.PalettiseTexture(world.tileset);
+        }
 
         return world;
     }
