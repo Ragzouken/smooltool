@@ -54,6 +54,19 @@ public class TilePalette : MonoBehaviour
         pages.Get(0).isOn = true;
     }
 
+    private void Update()
+    {
+        for (int i = 0; i < 8; ++i)
+        {
+            int z = (int) KeyCode.Alpha0;
+
+            if (Input.GetKeyDown((KeyCode) (z + i + 1)))
+            {
+                pages.Get(i).isOn = true;
+            }
+        }
+    }
+
     private void InitialiseTile(byte tile, TileToggle toggle)
     {
         toggle.SetTile(world.tiles[tile], 
@@ -67,6 +80,8 @@ public class TilePalette : MonoBehaviour
         {
             if (active) SetPage(page);
         });
+
+        toggle.GetComponentInChildren<Text>().text = (page + 1).ToString();
     }
 
     public void SetSelectedTile(byte tile)

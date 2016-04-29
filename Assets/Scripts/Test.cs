@@ -35,9 +35,11 @@ public class Test : MonoBehaviour
     [SerializeField] private RenderTexture mapTexture;
     [SerializeField] private GameObject mapObject;
 
+    [Header("Sounds")]
     [SerializeField] private new AudioSource audio;
     [SerializeField] private AudioClip speakSound;
     [SerializeField] private AudioClip placeSound;
+    [SerializeField] private AudioSource blockSource;
 
     [SerializeField] private CanvasGroup group;
     [SerializeField] private Texture2D testtex;
@@ -94,6 +96,7 @@ public class Test : MonoBehaviour
     private NetworkMatch match;
 
     public const int maxTiles = 256;
+    public static int scale = 1;
 
     public enum Version
     {
@@ -508,6 +511,8 @@ public class Test : MonoBehaviour
     private bool hosting;
     private List<int> connectionIDs = new List<int>();
 
+    private bool stickypalette;
+
     private Dictionary<int, byte[]> tiledata
         = new Dictionary<int, byte[]>();
 
@@ -591,7 +596,7 @@ public class Test : MonoBehaviour
     private void OnDisconnectedFromHost(int connectionID)
     {
         popups.Show("Disconnected from host.",
-                    () => SceneManager.LoadScene("test"));
+                    () => SceneManager.LoadScene("Main"));
     }
 
     private class Client
@@ -1036,16 +1041,22 @@ public class Test : MonoBehaviour
         var avatar = worldView.viewer;
 
         if (avatar != null
-         && avatar.source == avatar.destination
-         && !Blocked(avatar, avatar.destination + direction))
+         && avatar.source == avatar.destination)
         {
-            avatar.destination = avatar.destination + direction;
+            if (Blocked(avatar, avatar.destination + direction))
+            {
+                if (!blockSource.isPlaying) blockSource.Play();
+            }
+            else
+            {
+                avatar.destination = avatar.destination + direction;
 
-            worldView.RefreshAvatars();
+                worldView.RefreshAvatars();
 
-            tutorialMove.SetActive(false);
+                tutorialMove.SetActive(false);
 
-            SendAll(MoveAvatarMessage(avatar, avatar.destination));
+                SendAll(MoveAvatarMessage(avatar, avatar.destination));
+            }
         }
     }
 
@@ -1115,6 +1126,16 @@ public class Test : MonoBehaviour
         chatOverlay.Refresh();
     }
 
+    private void OpenMenu()
+    {
+        
+    }
+
+    private void CloseMenu()
+    {
+
+    }
+
     private void Update()
     {
         bool editing = tileEditor.gameObject.activeSelf;
@@ -1140,7 +1161,7 @@ public class Test : MonoBehaviour
             else if (hostID != -1)
             {
                 OnApplicationQuit();
-                SceneManager.LoadScene("test");
+                SceneManager.LoadScene("Main");
                 return;
             }
             else
@@ -1171,6 +1192,12 @@ public class Test : MonoBehaviour
             RenderTexture.active = old;
 
             File.WriteAllBytes(string.Format("{0}/{1}.png", maps, System.DateTime.Now.Ticks), mapTextureLocal.EncodeToPNG());
+        }
+        else if (Input.GetKeyDown(KeyCode.F2))
+        {
+            scale = 3 - scale;
+
+            Screen.SetResolution(512 * scale, 512 * scale, false);
         }
 
         if (hostID == -1) return;
@@ -1218,22 +1245,29 @@ public class Test : MonoBehaviour
             }
         }
 
+        if (Input.GetKeyDown(KeyCode.Space) && stickypalette)
+        {
+            stickypalette = false;
+        }
+
         if (!chatting 
          && !editing 
          && Input.GetKey(KeyCode.Space))
         {
             if (!tilePalette.gameObject.activeSelf)
             {
+                stickypalette = Input.GetKey(KeyCode.LeftControl);
+
                 tilePalette.Show();
             }
         }
-        else
+        else if (!stickypalette)
         {
             tilePalette.Hide();
         }
 
         if (!UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject()
-         && Rect.MinMaxRect(0, 0, 512, 512).Contains(Input.mousePosition)
+         && Rect.MinMaxRect(0, 0, Screen.width, Screen.height).Contains(Input.mousePosition)
          && !editing)
         {
             bool picker = Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt);

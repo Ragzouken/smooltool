@@ -11,6 +11,6 @@ public class Splash : MonoBehaviour
 {
     private void Start()
     {
-        SceneManager.LoadSceneAsync("test");
+        SceneManager.LoadSceneAsync("Main");
     }
 }
