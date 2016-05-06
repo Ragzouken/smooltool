@@ -135,6 +135,8 @@ public class World
             }
         }
 
+        palette[0] = Color.clear;
+
         /*
         for (int i = 0; i < 16; ++i)
         {

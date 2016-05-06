@@ -297,6 +297,8 @@ public class TileEditor : MonoBehaviour
                && !fill
                && !picker
                && Input.GetMouseButton(0);
+
+        colorToggles[0].GetComponent<Image>().color = CycleHue.Flash(1, 1, .75f);
     }
 
     private void Clamp(ref Vector2 coord, Rect bounds)

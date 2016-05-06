@@ -80,8 +80,13 @@ public class Test : MonoBehaviour
     [SerializeField] private GameObject tutorialTile;
     [SerializeField] private GameObject tutorialWall;
 
+    [SerializeField] private Material paletteMaterial;
+
     [SerializeField] private Texture2D defaultAvatar;
     private Texture2D avatarGraphic;
+
+    [Range(0, 1)]
+    [SerializeField] private float zoom;
 
     private Texture2D mapTextureLocal;
 
@@ -429,6 +434,13 @@ public class Test : MonoBehaviour
         tilePalette.Setup(world,
                           locks,
                           RequestTile);
+
+        for (int i = 0; i < world.palette.Length; ++i)
+        {
+            Debug.Log(string.Format("_Palette{0:D2}", i));
+
+            paletteMaterial.SetColor(string.Format("_Palette{0:D2}", i), world.palette[i]);
+        }
     }
 
     private void OnClickedEnter()
@@ -1212,6 +1224,8 @@ public class Test : MonoBehaviour
 
         mapCamera.gameObject.SetActive(mapping);
         mapObject.SetActive(mapping);
+
+        camera.orthographicSize = Mathf.Lerp(128, 32, zoom);
 
         if (Input.GetKeyDown(KeyCode.Return))
         {
