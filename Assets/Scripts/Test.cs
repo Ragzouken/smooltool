@@ -294,6 +294,7 @@ public class Test : MonoBehaviour
 
         create.name += "!" + (int)version;
 
+        testLAN.broadcastData = create.name;
         match.CreateMatch(create, OnMatchCreate);
         testLAN.StopBroadcast();
         testLAN.StartAsServer();
@@ -318,6 +319,7 @@ public class Test : MonoBehaviour
 
         match.CreateMatch(create, OnMatchCreate);
 
+        testLAN.broadcastData = create.name;
         testLAN.Initialize();
         testLAN.StopBroadcast();
         testLAN.StartAsServer();
@@ -381,6 +383,8 @@ public class Test : MonoBehaviour
         {
             if (test) return;
             test = true;
+
+            Debug.Log(data);
 
             ConnectThroughLAN(ip);
         };
