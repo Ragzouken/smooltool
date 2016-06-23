@@ -80,6 +80,7 @@ public class Test : MonoBehaviour
     [SerializeField] private GameObject tutorialTile;
     [SerializeField] private GameObject tutorialWall;
 
+    [SerializeField] private TestLAN testLAN;
     [SerializeField] private Material paletteMaterial;
 
     [SerializeField] private Texture2D defaultAvatar;
@@ -294,6 +295,8 @@ public class Test : MonoBehaviour
         create.name += "!" + (int)version;
 
         match.CreateMatch(create, OnMatchCreate);
+        testLAN.StopBroadcast();
+        testLAN.StartAsServer();
     }
 
     public void HostGame(World.Info world,
@@ -314,6 +317,10 @@ public class Test : MonoBehaviour
         create.name += "!" + (int)version;
 
         match.CreateMatch(create, OnMatchCreate);
+
+        testLAN.Initialize();
+        testLAN.StopBroadcast();
+        testLAN.StartAsServer();
     }
 
     private void OnMatchCreate(CreateMatchResponse response)
@@ -366,6 +373,18 @@ public class Test : MonoBehaviour
 
     private IEnumerator RefreshList()
     {
+        testLAN.Initialize();
+        //testLAN.StopBroadcast();
+        testLAN.StartAsClient();
+        bool test = false;
+        testLAN.OnReceive += (ip, data) =>
+        {
+            if (test) return;
+            test = true;
+
+            ConnectThroughLAN(ip);
+        };
+
         while (hostID == -1)
         {
             var request = new ListMatchRequest();
@@ -437,7 +456,7 @@ public class Test : MonoBehaviour
 
         for (int i = 0; i < world.palette.Length; ++i)
         {
-            Debug.Log(string.Format("_Palette{0:D2}", i));
+            //Debug.Log(string.Format("_Palette{0:D2}", i));
 
             paletteMaterial.SetColor(string.Format("_Palette{0:D2}", i), world.palette[i]);
         }
@@ -1414,6 +1433,7 @@ public class Test : MonoBehaviour
                         for (int i = 0; i < 16; ++i)
                         {
                             world.palette[i] = reader.ReadColor32();
+                            paletteMaterial.SetColor(string.Format("_Palette{0:D2}", i), world.palette[i]);
                         }
                     }
                     else if (type == Type.Walls)
@@ -1432,20 +1452,6 @@ public class Test : MonoBehaviour
                         int id = reader.ReadInt32();
 
                         tiledata[id] = reader.ReadBytesAndSize();
-                    }
-                    else if (type == Type.TileImage)
-                    {
-                        var colors = new Color32[1024];
-
-                        int tile = reader.ReadByte();
-
-                        colors = reader.ReadBytesAndSize().Select(pal => (Color32) world.palette[pal]).ToArray();
-
-                        int x = tile % 16;
-                        int y = tile / 16;
-
-                        world.tileset.SetPixels32(x * 32, y * 32, 32, 32, colors);
-                        world.tileset.Apply();
                     }
                     else if (type == Type.ReplicateAvatar)
                     {
@@ -1583,6 +1589,24 @@ public class Test : MonoBehaviour
                                               Utility.GetSourceID(),
                                               response.nodeId,
                                               out error);
+    }
+
+    void ConnectThroughLAN(string address)
+    {
+        world = new World();
+        world.StaticiseTileset();
+        SetWorld(world);
+
+        group.interactable = false;
+
+        SetupHost(false);
+
+        int port = 9002;
+
+        byte error;
+        NetworkTransport.Connect(hostID, address, port, 0, out error);
+
+        Debug.Log((NetworkError) error);
     }
 
     public static int ColorDistance(Color32 a, Color32 b)
