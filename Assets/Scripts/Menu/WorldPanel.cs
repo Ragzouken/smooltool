@@ -14,23 +14,17 @@ public class WorldPanel : MonoBehaviour
     [SerializeField] private Text nameText;
     [SerializeField] private Text playersText;
 
-    private MatchDesc desc;
+    private GameListing desc;
 
     private void Awake()
     {
         toggle.onValueChanged.AddListener(OnToggled);
     }
 
-    public void SetMatch(MatchDesc desc)
+    public void SetMatch(GameListing desc)
     {
-        string name = string.Join("!", desc.name.Split('!')
-                                                .Reverse()
-                                                .Skip(1)
-                                                .Reverse()
-                                                .ToArray());
-
-        nameText.text = name;
-        playersText.text = desc.currentSize + " / " + desc.maxSize;
+        nameText.text = desc.name;
+        playersText.text = desc.count.ToString();
         this.desc = desc;
     }
 

@@ -20,6 +20,15 @@ using System.IO;
 using UnityEditor;
 #endif
 
+public class GameListing
+{
+    public Test.Version version;
+    public string name;
+    public int count;
+    public string address;
+    public MatchDesc match;
+}
+
 public class Test : MonoBehaviour
 {
     [JsonObject(IsReference = false)]
@@ -53,7 +62,7 @@ public class Test : MonoBehaviour
     [SerializeField] private GameObject noWorldsDisableObject;
     [SerializeField] private GameObject cantConnectDisableObject;
 
-    private MonoBehaviourPooler<MatchDesc, WorldPanel> worlds;
+    private MonoBehaviourPooler<GameListing, WorldPanel> worlds;
 
     [Header("Details")]
     [SerializeField] private GameObject detailsDisableObject;
@@ -130,9 +139,9 @@ public class Test : MonoBehaviour
 
         enterButton.onClick.AddListener(OnClickedEnter);
 
-        worlds = new MonoBehaviourPooler<MatchDesc, WorldPanel>(worldPrefab,
-                                                                worldContainer,
-                                                                InitialiseWorld);
+        worlds = new MonoBehaviourPooler<GameListing, WorldPanel>(worldPrefab,
+                                                                  worldContainer,
+                                                                  InitialiseWorld);
 
         Application.runInBackground = true;
 
@@ -161,7 +170,7 @@ public class Test : MonoBehaviour
         mapTextureLocal = new Texture2D(1024, 1024);
     }
 
-    private void InitialiseWorld(MatchDesc desc, WorldPanel panel)
+    private void InitialiseWorld(GameListing desc, WorldPanel panel)
     {
         panel.SetMatch(desc);
     }
@@ -373,6 +382,27 @@ public class Test : MonoBehaviour
         return 0;
     }
 
+    private Dictionary<string, GameListing> lanGames
+        = new Dictionary<string, GameListing>();
+
+    private List<GameListing> matchGames = new List<GameListing>();
+
+    private GameListing ConvertListing(MatchDesc desc)
+    {
+        return new GameListing
+        {
+            name = desc.name,
+            count = desc.currentSize,
+            match = desc,
+            version = (Version) GetVersion(desc),
+        };
+    }
+
+    private void RefreshListing()
+    {
+        worlds.SetActive(lanGames.Values.Concat(matchGames));
+    }
+
     private IEnumerator RefreshList()
     {
         testLAN.Initialize();
@@ -381,12 +411,20 @@ public class Test : MonoBehaviour
         bool test = false;
         testLAN.OnReceive += (ip, data) =>
         {
-            if (test) return;
-            test = true;
+            lanGames[ip] = new GameListing
+            {
+                address = ip,
+                count = 0,
+            };
 
-            Debug.Log(data);
+            var parts = data.Split('!');
+            int version;
 
-            ConnectThroughLAN(ip);
+            if (int.TryParse(parts.Last(), out version))
+            {
+                lanGames[ip].name = string.Join("!", parts.Take(parts.Count() - 1).ToArray());
+                lanGames[ip].version = (Version) version;
+            }
         };
 
         while (hostID == -1)
@@ -397,12 +435,15 @@ public class Test : MonoBehaviour
 
             match.ListMatches(request, matches =>
             {
+                matchGames.Clear();
+
                 if (!matches.success)
                 {
                     newerVersionDisableObject.SetActive(false);
                     noWorldsDisableObject.SetActive(false);
                     cantConnectDisableObject.SetActive(true);
-                    worlds.Clear();
+
+                    RefreshListing();
 
                     return;
                 }
@@ -415,32 +456,34 @@ public class Test : MonoBehaviour
                 newerVersionDisableObject.SetActive(newer.Any());
                 noWorldsDisableObject.SetActive(!newer.Any() && !valid.Any());
                 cantConnectDisableObject.SetActive(false);
-                worlds.SetActive(valid);
+                worlds.SetActive(valid.Select(m => ConvertListing(m)));
+
+                matchGames.Clear();
+                matchGames.AddRange(valid.Select(m => ConvertListing(m)));
 
                 if (selected != null
-                 && !list.Any(m => m.networkId == selected.networkId))
+                 && selected.match != null
+                 && !list.Any(m => m.networkId == selected.match.networkId))
                 {
                     DeselectMatch();
                 }
+
+                RefreshListing();
             });
 
             yield return new WaitForSeconds(5);
         }
     }
 
-    private MatchDesc selected;
+    private GameListing selected;
 
-    public void SelectMatch(MatchDesc desc)
+    public void SelectMatch(GameListing desc)
     {
         selected = desc;
         detailsDisableObject.SetActive(true);
-        worldDescription.text = string.Join("!", desc.name.Split('!')
-                                                           .Reverse()
-                                                           .Skip(1)
-                                                           .Reverse()
-                                                           .ToArray());
+        worldDescription.text = desc.name;
 
-        passwordObject.SetActive(desc.isPrivate);
+        passwordObject.SetActive(desc.match != null && desc.match.isPrivate);
         passwordInput.text = "";
     }
 
@@ -476,7 +519,14 @@ public class Test : MonoBehaviour
 
             group.interactable = false;
 
-            match.JoinMatch(selected.networkId, passwordInput.text, OnMatchJoined);
+            if (selected.match != null)
+            {
+                match.JoinMatch(selected.match.networkId, passwordInput.text, OnMatchJoined);
+            }
+            else
+            {
+                ConnectThroughLAN(selected.address);
+            }
         }
     }
 
@@ -1597,12 +1647,6 @@ public class Test : MonoBehaviour
 
     void ConnectThroughLAN(string address)
     {
-        world = new World();
-        world.StaticiseTileset();
-        SetWorld(world);
-
-        group.interactable = false;
-
         SetupHost(false);
 
         int port = 9002;
