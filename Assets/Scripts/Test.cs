@@ -16,6 +16,8 @@ using Newtonsoft.Json;
 
 using System.IO;
 
+using System.Text.RegularExpressions;
+
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -37,6 +39,8 @@ public class Test : MonoBehaviour
         public string name;
         public bool hideTutorial;
     }
+
+    private static Regex gamename = new Regex(@"(.*)!(\d+)\?(\d+)");
 
     [SerializeField] private Font[] fonts;
 
@@ -88,6 +92,11 @@ public class Test : MonoBehaviour
     [SerializeField] private GameObject tutorialMove;
     [SerializeField] private GameObject tutorialTile;
     [SerializeField] private GameObject tutorialWall;
+
+    [Header("Direct IP")]
+    [SerializeField] private GameObject ipObject;
+    [SerializeField] private InputField ipInput;
+    [SerializeField] private Button ipOpen, ipAccept, ipCancel;
 
     [SerializeField] private TestLAN testLAN;
     [SerializeField] private Material paletteMaterial;
@@ -168,6 +177,10 @@ public class Test : MonoBehaviour
         LoadConfig();
 
         mapTextureLocal = new Texture2D(1024, 1024);
+
+        ipOpen.onClick.AddListener(() => { ipObject.SetActive(true); ipInput.text = ""; });
+        ipAccept.onClick.AddListener(() => { PreConnect();  ConnectThroughLAN(ipInput.text); ipObject.SetActive(false); } );
+        ipCancel.onClick.AddListener(() => ipObject.SetActive(false));
     }
 
     private void InitialiseWorld(GameListing desc, WorldPanel panel)
@@ -301,13 +314,15 @@ public class Test : MonoBehaviour
         create.advertise = true;
         create.password = password;
 
-        create.name += "!" + (int)version;
+        create.name += "!" + (int)version + "?0";
 
         testLAN.broadcastData = create.name;
         match.CreateMatch(create, OnMatchCreate);
         testLAN.StopBroadcast();
         testLAN.StartAsServer();
     }
+
+    private string hostedname = "";
 
     public void HostGame(World.Info world,
                          string name,
@@ -324,7 +339,10 @@ public class Test : MonoBehaviour
         create.advertise = true;
         create.password = password;
 
-        create.name += "!" + (int)version;
+
+        hostedname = create.name;
+
+        create.name += "!" + (int)version + "?0";
 
         match.CreateMatch(create, OnMatchCreate);
 
@@ -368,18 +386,7 @@ public class Test : MonoBehaviour
 
     private int GetVersion(MatchDesc desc)
     {
-        if (desc.name.Contains("!"))
-        {
-            string end = desc.name.Split('!').Last();
-            int version;
-
-            if (int.TryParse(end, out version))
-            {
-                return version;
-            }
-        }
-
-        return 0;
+        return int.Parse(gamename.Match(desc.name).Groups[2].Value);
     }
 
     private Dictionary<string, GameListing> lanGames
@@ -389,18 +396,45 @@ public class Test : MonoBehaviour
 
     private GameListing ConvertListing(MatchDesc desc)
     {
-        return new GameListing
-        {
-            name = desc.name,
-            count = desc.currentSize,
-            match = desc,
-            version = (Version) GetVersion(desc),
-        };
+        var listing = new GameListing();
+
+        ParseName(desc.name,
+                  out listing.name,
+                  out listing.version,
+                  out listing.count);
+
+        listing.count = desc.currentSize;
+        listing.match = desc;
+
+        return listing;
     }
 
     private void RefreshListing()
     {
         worlds.SetActive(lanGames.Values.Concat(matchGames));
+    }
+
+    private bool ParseName(string full, 
+                           out string name,
+                           out Version version, 
+                           out int count)
+    {
+        var match = gamename.Match(full);
+
+        version = Version.DEV;
+        name = "none";
+        count = 0;
+
+        if (match.Success)
+        {
+            name = match.Groups[1].Value;
+            version = (Version) int.Parse(match.Groups[2].Value);
+            count = int.Parse(match.Groups[3].Value);
+        }
+
+        Debug.Log(full + " = " + name + "/" + version + "/" + count);
+
+        return match.Success;
     }
 
     private IEnumerator RefreshList()
@@ -411,24 +445,25 @@ public class Test : MonoBehaviour
         bool test = false;
         testLAN.OnReceive += (ip, data) =>
         {
-            lanGames[ip] = new GameListing
+            var listing = new GameListing
             {
                 address = ip,
-                count = 0,
             };
 
-            var parts = data.Split('!');
-            int version;
+            lanGames[ip] = listing;
 
-            if (int.TryParse(parts.Last(), out version))
-            {
-                lanGames[ip].name = string.Join("!", parts.Take(parts.Count() - 1).ToArray());
-                lanGames[ip].version = (Version) version;
-            }
+            ParseName(data,
+                      out listing.name,
+                      out listing.version,
+                      out listing.count);
+
+            listing.name = "(LOCAL) " + listing.name;
         };
 
         while (hostID == -1)
         {
+            testLAN.broadcastData = hostedname + "!" + (int)version + "?" + clients.Count;
+
             var request = new ListMatchRequest();
             request.nameFilter = "";
             request.pageSize = 32;
@@ -509,15 +544,20 @@ public class Test : MonoBehaviour
         }
     }
 
+    private void PreConnect()
+    {
+        world = new World();
+        world.StaticiseTileset();
+        SetWorld(world);
+
+        group.interactable = false;
+    }
+
     private void OnClickedEnter()
     {
         if (selected != null)
         {
-            world = new World();
-            world.StaticiseTileset();
-            SetWorld(world);
-
-            group.interactable = false;
+            PreConnect();
 
             if (selected.match != null)
             {
