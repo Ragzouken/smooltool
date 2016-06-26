@@ -85,6 +85,7 @@ public class Test : MonoBehaviour
     [SerializeField] private CustomiseTab customiseTab;
     [SerializeField] private TilePalette tilePalette;
     [SerializeField] private ChatOverlay chatOverlay;
+    [SerializeField] private PaletteEditor paletteEditor;
 
     [Header("Tutorial")]
     [SerializeField] private GameObject tutorialObject;
@@ -133,9 +134,10 @@ public class Test : MonoBehaviour
         PRE6,
         PRE7,
         PRE8,
+        PRE9,
     }
 
-    public static Version version = Version.PRE8;
+    public static Version version = Version.PRE9;
 
     private void Awake()
     {
@@ -536,12 +538,22 @@ public class Test : MonoBehaviour
                           locks,
                           RequestTile);
 
+        paletteEditor.SetWorld(world);
+
         for (int i = 0; i < world.palette.Length; ++i)
         {
             //Debug.Log(string.Format("_Palette{0:D2}", i));
 
             paletteMaterial.SetColor(string.Format("_Palette{0:D2}", i), world.palette[i]);
         }
+    }
+
+    public void UpdatePalette(byte index, Color color)
+    {
+        world.palette[index] = color;
+        paletteMaterial.SetColor(string.Format("_Palette{0:D2}", index), color);
+
+        SendAll(PaletteEditMessage(index));
     }
 
     private void PreConnect()
@@ -647,6 +659,7 @@ public class Test : MonoBehaviour
         Tilemap,
         Walls,
         Palette,
+        PaletteEdit,
 
         TileImage,
         TileChunk,
@@ -892,6 +905,26 @@ public class Test : MonoBehaviour
         return writer.AsArray();
     }
 
+    private void ReceivePaletteEdit(NetworkReader reader)
+    {
+        byte index = reader.ReadByte();
+        Color color = reader.ReadColor32();
+
+        world.palette[index] = color;
+        paletteEditor.Refresh();
+        paletteMaterial.SetColor(string.Format("_Palette{0:D2}", index), world.palette[index]);
+    }
+
+    private byte[] PaletteEditMessage(byte index)
+    {
+        var writer = new NetworkWriter();
+        writer.Write((byte) Type.PaletteEdit);
+        writer.Write(index);
+        writer.Write((Color32) world.palette[index]);
+
+        return writer.AsArray();
+    }
+
     private void ReceiveSetTile(NetworkReader reader)
     {
         int location = reader.ReadInt32();
@@ -1050,7 +1083,7 @@ public class Test : MonoBehaviour
         uint ex = (uint) Mathf.FloorToInt(end.x);
         uint ey = (uint) Mathf.FloorToInt(end.y);
 
-        byte index = world.ColorToPalette(color);
+        byte index = world.ColorToPalette(color, true);
 
         writer.Write((byte) Type.TileStroke);
         writer.Write(tile);
@@ -1263,6 +1296,11 @@ public class Test : MonoBehaviour
 
     private void Update()
     {
+        if (Input.GetKeyDown(KeyCode.LeftBracket))
+        {
+            paletteEditor.gameObject.SetActive(!paletteEditor.gameObject.activeSelf);
+        }
+
         bool editing = tileEditor.gameObject.activeSelf;
         bool chatting = chatOverlay.gameObject.activeSelf;
         bool mapping = Input.GetKey(KeyCode.Tab)
@@ -1530,6 +1568,10 @@ public class Test : MonoBehaviour
                             paletteMaterial.SetColor(string.Format("_Palette{0:D2}", i), world.palette[i]);
                         }
                     }
+                    else if (type == Type.PaletteEdit)
+                    {
+                        ReceivePaletteEdit(reader);
+                    }
                     else if (type == Type.Walls)
                     {
                         world.walls.Clear();
@@ -1770,7 +1812,7 @@ public class Test : MonoBehaviour
         int y = tile / 16;
 
         Color[] colors = world.tileset.GetPixels(x * 32, y * 32, 32, 32);
-        byte[] bytes = colors.Select(c => world.ColorToPalette(c)).ToArray();
+        byte[] bytes = colors.Select(c => world.ColorToPalette(c, true)).ToArray();
         byte[] chunk;
 
         int offset = 0;
