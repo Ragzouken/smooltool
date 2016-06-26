@@ -83,7 +83,7 @@
 				// sample the texture
 				fixed4 col = tex2D(_MainTex, i.uv);
 			 
-				int c = col.r * 16;
+				int c = col.r * 15;
 
 				if (c ==  0) return _Palette00;
 				if (c ==  1) return _Palette01;

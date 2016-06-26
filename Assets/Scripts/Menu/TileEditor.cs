@@ -262,6 +262,8 @@ public class TileEditor : MonoBehaviour
 
             if (drawing)
             {
+                Color maskColor = new Color(brushColorIndex / 15f, 0, 0, 1);
+
                 var blend = brushColor.a == 1 ? Blend.Alpha
                                               : Blend.Subtract;
 
@@ -269,7 +271,7 @@ public class TileEditor : MonoBehaviour
 
                 using (Brush line = Brush.Line(prevCursor, 
                                                currCursor,
-                                               brushColor.a == 1 ? brushColor : Color.white,
+                                               brushColor.a == 1 ? maskColor : Color.white,
                                                brushSize))
                 {
                     Brush.Apply(line,

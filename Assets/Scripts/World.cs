@@ -158,31 +158,26 @@ public class World
         return (byte) palette.ColorToPalette(color, clearzero);
     }
 
+    private Color IndexToMask(byte index)
+    {
+        return index == 0 ? Color.clear : new Color(index / 15f, 0, 0, 1f);
+    }
+
     public void PalettiseTexture(Texture2D texture, bool clearzero = false)
     {
         var colors = texture.GetPixels()
                             .Select(color => ColorToPalette(color, clearzero))
-                            .Select(index => index == 0 && clearzero ? Color.clear : palette[index])
+                            .Select(index => IndexToMask(index))
                             .ToArray();
 
         texture.SetPixels(colors);
         texture.Apply();
     }
 
-    public IEnumerator PalettiseTextureCO(Texture2D texture, bool clearzero = false)
+    public void Convert()
     {
-        Color32[] pixels = texture.GetPixels32();
+        palette[0] = Color.clear;
 
-        for (int i = 0; i < pixels.Length; ++i)
-        {
-            int index = ColorToPalette(pixels[i], clearzero);
-
-            pixels[i] = index == 0 && clearzero ? Color.clear : palette[index];
-
-            if (i % 1024 == 0) yield return null;
-        }
-
-        texture.SetPixels32(pixels);
-        texture.Apply();
+        PalettiseTexture(tileset);
     }
 }

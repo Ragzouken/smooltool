@@ -101,6 +101,7 @@ public class Test : MonoBehaviour
 
     [SerializeField] private TestLAN testLAN;
     [SerializeField] private Material paletteMaterial;
+    [SerializeField] private Material paletteMaterialUI;
 
     [SerializeField] private Texture2D defaultAvatar;
     private Texture2D avatarGraphic;
@@ -229,6 +230,8 @@ public class Test : MonoBehaviour
         float d = (float) (File.GetLastWriteTime(dir + "/tileset.png") - info.lastPlayed).TotalSeconds;
 
         world.tileset.LoadImage(File.ReadAllBytes(dir + "/tileset.png"));
+
+        //world.Convert();
 
         if (d > 5)
         {
@@ -542,16 +545,20 @@ public class Test : MonoBehaviour
 
         for (int i = 0; i < world.palette.Length; ++i)
         {
-            //Debug.Log(string.Format("_Palette{0:D2}", i));
-
-            paletteMaterial.SetColor(string.Format("_Palette{0:D2}", i), world.palette[i]);
+            SetPalette((byte) i, world.palette[i]);
         }
+    }
+
+    private void SetPalette(byte index, Color color)
+    {
+        paletteMaterial.SetColor(string.Format("_Palette{0:D2}", index), color);
+        paletteMaterialUI.SetColor(string.Format("_Palette{0:D2}", index), color);
     }
 
     public void UpdatePalette(byte index, Color color)
     {
         world.palette[index] = color;
-        paletteMaterial.SetColor(string.Format("_Palette{0:D2}", index), color);
+        SetPalette(index, color);
 
         SendAll(PaletteEditMessage(index));
     }
@@ -912,7 +919,7 @@ public class Test : MonoBehaviour
 
         world.palette[index] = color;
         paletteEditor.Refresh();
-        paletteMaterial.SetColor(string.Format("_Palette{0:D2}", index), world.palette[index]);
+        SetPalette(index, color);
     }
 
     private byte[] PaletteEditMessage(byte index)
@@ -1565,7 +1572,7 @@ public class Test : MonoBehaviour
                         for (int i = 0; i < 16; ++i)
                         {
                             world.palette[i] = reader.ReadColor32();
-                            paletteMaterial.SetColor(string.Format("_Palette{0:D2}", i), world.palette[i]);
+                            SetPalette((byte) i, world.palette[i]);
                         }
                     }
                     else if (type == Type.PaletteEdit)
